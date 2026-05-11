@@ -28,11 +28,6 @@ repos:
       - id: markdownlint-cli2
         exclude: ^\.claude/
 
-  - repo: https://github.com/fastai/nbdev
-    rev: 2.4.10
-    hooks:
-      - id: nbdev_clean
-
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.11
     hooks:

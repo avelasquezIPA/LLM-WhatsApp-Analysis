@@ -415,7 +415,7 @@ pre-commit-run:
 
 [windows]
 pre-install:
-    winget install astral-sh.uv Git.Git GitHub.cli Posit.Quarto OpenJS.NodeJS
+    -winget install astral-sh.uv Git.Git GitHub.cli Posit.Quarto OpenJS.NodeJS
     npm install -g markdownlint-cli2
 
 [linux]
