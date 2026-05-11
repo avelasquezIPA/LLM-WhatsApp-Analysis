@@ -1,0 +1,42 @@
+project:
+  type: default
+  title: "IPA Stata Analysis Project"
+
+format:
+  typst: # docs: https://quarto.org/docs/output-formats/typst.html
+    fontsize: 11pt
+    mainfont: "Arial"
+    keep-typ: true
+
+  html: # docs: https://quarto.org/docs/output-formats/html-basics.html
+    theme: cosmo
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    fig-cap-location: bottom
+    tbl-cap-location: top
+
+  pdf: # docs: https://quarto.org/docs/output-formats/pdf-basics.html
+    documentclass: report
+    fontsize: 11pt
+    mainfont: "Arial"
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    fig-cap-location: bottom
+    tbl-cap-location: top
+    keep-tex: true
+
+execute:
+  echo: false
+  warning: false
+  message: false
+  cache: false
+
+bibliography: reports/references.bib
+
+knitr:
+  opts_chunk:
+    fig.align: "center"
+    fig.pos: "H"
+    out.width: "90%"

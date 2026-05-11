@@ -1,0 +1,1003 @@
+---
+title: "Analysis Report: [Project Title]"
+subtitle: "Reproducible Research Using IPA Stata Template"
+author:
+  - name: "[Author Name]"
+    affiliation: "Innovations for Poverty Action"
+date: today
+# 
+# DOCX OUTPUT WITH CUSTOM COVER PAGE:
+#   To use a custom cover page instead of the auto-generated title:
+#   1. Modify your cover page in: reports/cover_page.docx
+#   2. Render with: just render-docx reports/analysis_report.qmd
+#   3. Find output: reports/analysis_report.docx
+#   
+#
+format:
+  html: # docs: https://quarto.org/docs/output-formats/html-basics.html
+    theme: cosmo
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    fig-cap-location: bottom
+    tbl-cap-location: top
+  docx: # docs: https://quarto.org/docs/output-formats/ms-word.html
+    output-file: "analysis_report_raw.docx"
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    reference-doc: custom-reference.docx
+    fig-cap-location: bottom
+    tbl-cap-location: top
+  typst: # docs: https://quarto.org/docs/output-formats/typst.html
+    fontsize: 11pt
+    mainfont: "Arial"
+    keep-typ: true
+  pdf: # docs: https://quarto.org/docs/output-formats/pdf-basics.html
+    documentclass: report
+    fontsize: 11pt
+    mainfont: "Arial"
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    fig-cap-location: bottom
+    tbl-cap-location: top
+    keep-tex: true
+bibliography: references.bib
+jupyter: python3
+execute:
+  echo: false
+  warning: false
+  error: false
+---
+
+```{python}
+#| label: setup
+#| include: false
+
+import os
+import pathlib
+import re
+from datetime import datetime
+from pathlib import Path
+
+# Define paths to outputs (using pathlib for cross-platform compatibility)
+project_root = Path(os.getcwd()).parent
+outputs_path = project_root / 'outputs'
+tables_path = outputs_path / 'tables'
+figures_path = outputs_path / 'figures'
+logs_path = project_root / 'analysis' / 'logs'
+
+def include_latex_table(file_path, caption="", label=""):
+    """
+    Helper function to include LaTeX tables in Quarto document
+
+    Args:
+        file_path (str): Path to the LaTeX table file
+        caption (str): Table caption
+        label (str): Table label for referencing
+
+    Returns:
+        str: Cleaned LaTeX table content
+    """
+    file_path = Path(file_path)
+
+    if file_path.exists():
+        with open(file_path, 'r', encoding='utf-8') as f:
+            table_content = f.read()
+
+        # Clean up the LaTeX table for better integration
+        # Remove standalone document elements
+        table_content = re.sub(r'\\documentclass.*?\\begin\{document\}', '', table_content, flags=re.DOTALL)
+        table_content = re.sub(r'\\end\{document\}', '', table_content)
+
+        # Add caption and label if provided
+        if caption and label:
+            table_content = f"""\\begin{{table}}[H]
+\\centering
+\\caption{{{caption}}}
+\\label{{{label}}}
+{table_content}
+\\end{{table}}"""
+
+        return table_content
+    else:
+        return f"Table not found: {file_path}"
+
+def check_outputs():
+    """
+    Check if analysis outputs exist and provide guidance if missing
+
+    Returns:
+        dict: Status of tables and figures existence
+    """
+    tables_exist = (tables_path / "descriptive_stats.tex").exists()
+    figures_exist = (figures_path / "figure1_income_distribution.pdf").exists()
+
+    if not tables_exist or not figures_exist:
+        print("⚠️  **Note**: Some analysis outputs are missing. Run the following to generate all outputs:\n")
+        print("```bash")
+        print("just stata-full")
+        print("```\n")
+
+    return {"tables": tables_exist, "figures": figures_exist}
+
+def check_file_exists(file_path):
+    """Simple helper to check if a file exists"""
+    return Path(file_path).exists()
+
+
+# QUESTION: Is it necessary for our outputs to be in PDF format? rendering in docx would be easier if we use PNG as the output format.
+
+def convert_pdf_to_png(pdf_path, dpi=300):
+    """
+    Convert PDF to PNG for DOCX compatibility
+    
+    Args:
+        pdf_path (Path): Path to PDF file
+        dpi (int): Resolution for PNG conversion
+        
+    Returns:
+        Path: Path to PNG file or None if conversion fails
+    """
+    pdf_path = Path(pdf_path)
+    png_path = pdf_path.with_suffix('.png')
+    
+    # If PNG already exists and is newer than PDF, skip conversion
+    if png_path.exists() and png_path.stat().st_mtime > pdf_path.stat().st_mtime:
+        return png_path
+    
+    # Try PyMuPDF first (no external dependencies)
+    try:
+        import fitz  # PyMuPDF
+        
+        doc = fitz.open(str(pdf_path))
+        page = doc[0]
+        zoom = dpi / 72
+        mat = fitz.Matrix(zoom, zoom)
+        pix = page.get_pixmap(matrix=mat)
+        pix.save(str(png_path))
+        doc.close()
+        
+        return png_path
+    except ImportError:
+        pass
+    except Exception as e:
+        print(f"⚠️ PyMuPDF conversion failed: {e}")
+    
+    # Fallback to pdf2image
+    try:
+        from pdf2image import convert_from_path
+        images = convert_from_path(str(pdf_path), dpi=dpi, first_page=1, last_page=1)
+        if images:
+            images[0].save(str(png_path), 'PNG')
+            return png_path
+    except ImportError:
+        print("⚠️ Neither pymupdf nor pdf2image installed")
+        print("   Run: just convert-figures")
+        return None
+    except Exception as e:
+        print(f"⚠️ PDF conversion failed: {e}")
+        print("   Run: just convert-figures")
+        return None
+    
+    return None
+
+
+def display_figure_conditional(figure_name, alt_text, label):
+    """
+    Display figure that works for HTML (PDF) and DOCX (PNG)
+    
+    Args:
+        figure_name (str): Name of the figure file (without extension)
+        alt_text (str): Alternative text for the image
+        label (str): Label for cross-referencing
+        
+    Returns:
+        str: Markdown for the figure
+    """
+    pdf_path = figures_path / f"{figure_name}.pdf"
+    png_path = figures_path / f"{figure_name}.png"
+    
+    if not pdf_path.exists():
+        return f"⚠️ **Figure not available.** Run `just stata-figures` to generate."
+    
+    # Try to convert PDF to PNG if PNG doesn't exist
+    if not png_path.exists():
+        converted = convert_pdf_to_png(pdf_path)
+        if converted:
+            png_path = converted
+    
+    # For HTML/PDF: use PDF for better quality
+    # For DOCX: use PNG for compatibility
+    # Use relative path from reports/ directory
+    if png_path.exists():
+        return f"![{alt_text}](../outputs/figures/{figure_name}.png){{{label}}}"
+    else:
+        # Fallback to PDF and show warning for DOCX users
+        return f"![{alt_text}](../outputs/figures/{figure_name}.pdf){{{label}}}\n\n*Note: If image doesn't display in Word, run PNG conversion.*"
+
+def latex_table_to_html(tex_content):
+    """
+    Convert a LaTeX table to HTML for display in HTML output
+    
+    Args:
+        tex_content (str): LaTeX table content
+        
+    Returns:
+        str: HTML table
+    """
+    # Extract table content between tabular tags
+    tabular_match = re.search(r'\\begin\{tabular\}.*?\\end\{tabular\}', tex_content, re.DOTALL)
+    if not tabular_match:
+        return "<pre>" + tex_content + "</pre>"
+    
+    tabular = tabular_match.group(0)
+    
+    # Extract caption if present
+    caption_match = re.search(r'\\caption\{(.*?)\}', tex_content)
+    caption = caption_match.group(1) if caption_match else ""
+    
+    # Start HTML table
+    html = '<div style="overflow-x: auto;">\n'
+    if caption:
+        html += f'<p style="text-align: center; font-weight: bold; margin-bottom: 10px;">{caption}</p>\n'
+    
+    html += '<table style="margin: 0 auto; border-collapse: collapse; font-size: 0.9em;">\n'
+    
+    # Extract column alignment
+    col_spec = re.search(r'\\begin\{tabular\}\{(.*?)\}', tabular)
+    
+    # Split into rows
+    rows = re.split(r'\\\\', tabular)
+    
+    in_header = True
+    for row in rows:
+        # Skip tabular begin/end
+        if 'begin{tabular}' in row or 'end{tabular}' in row:
+            continue
+        
+        # Remove LaTeX rules from the row but keep processing it
+        row = re.sub(r'\\toprule\s*', '', row)
+        row = re.sub(r'\\midrule\s*', '', row)
+        row = re.sub(r'\\bottomrule\s*', '', row)
+            
+        # Clean up the row
+        row = re.sub(r'\\multicolumn\{(\d+)\}\{[^}]*\}\{([^}]*)\}', r'<COLSPAN\1>\2</COLSPAN\1>', row)
+        
+        # Split into cells
+        cells = [cell.strip() for cell in row.split('&')]
+        
+        if not any(cell for cell in cells):
+            continue
+        
+        # Determine if this is a header row
+        is_header = in_header and ('mean' in row or 'Full Sample' in row or 'multicolumn' in row)
+        tag = 'th' if is_header else 'td'
+        
+        html += '  <tr>\n'
+        for cell in cells:
+            # Handle colspan
+            colspan_match = re.search(r'<COLSPAN(\d+)>(.*?)</COLSPAN\1>', cell)
+            if colspan_match:
+                span = colspan_match.group(1)
+                content = colspan_match.group(2)
+                html += f'    <{tag} colspan="{span}" style="text-align: center; padding: 8px; border-bottom: 1px solid #ddd;">{content}</{tag}>\n'
+            else:
+                align = "left" if cells.index(cell) == 0 else "center"
+                html += f'    <{tag} style="text-align: {align}; padding: 8px; border-bottom: 1px solid #ddd;">{cell}</{tag}>\n'
+        
+        html += '  </tr>\n'
+        
+        if is_header:
+            in_header = False
+    
+    html += '</table>\n'
+    
+    # Add footnote if present
+    footnote_match = re.search(r'\\footnotesize\s+(.*?)\}', tex_content)
+    if footnote_match:
+        footnote = footnote_match.group(1)
+        html += f'<p style="font-size: 0.8em; font-style: italic; margin-top: 10px; max-width: 800px; margin-left: auto; margin-right: auto;">{footnote}</p>\n'
+    
+    html += '</div>\n'
+    
+    return html
+
+def latex_table_to_markdown(tex_content):
+    """
+    Convert a LaTeX table to Markdown for DOCX/PDF conversion
+    
+    Args:
+        tex_content (str): LaTeX table content
+        
+    Returns:
+        str: Markdown table
+    """
+    # Extract table content between tabular tags
+    tabular_match = re.search(r'\\begin\{tabular\}.*?\\end\{tabular\}', tex_content, re.DOTALL)
+    if not tabular_match:
+        return tex_content
+    
+    tabular = tabular_match.group(0)
+    
+    # Extract caption if present
+    caption_match = re.search(r'\\caption\{(.*?)\}', tex_content)
+    caption = caption_match.group(1) if caption_match else ""
+    
+    # Extract footnote if present
+    footnote_match = re.search(r'\\footnotesize\s+(.*?)\}', tex_content)
+    footnote = footnote_match.group(1) if footnote_match else ""
+    
+    # Split into rows
+    rows = re.split(r'\\\\', tabular)
+    
+    # Parse rows and cells
+    table_data = []
+    for row in rows:
+        # Skip tabular begin/end
+        if 'begin{tabular}' in row or 'end{tabular}' in row:
+            continue
+        
+        # Remove LaTeX rules from the row but keep processing it
+        row = re.sub(r'\\toprule\s*', '', row)
+        row = re.sub(r'\\midrule\s*', '', row)
+        row = re.sub(r'\\bottomrule\s*', '', row)
+        
+        # Handle multicolumn
+        row = re.sub(r'\\multicolumn\{(\d+)\}\{[^}]*\}\{([^}]*)\}', r'\2', row)
+        
+        # Split into cells
+        cells = [cell.strip() for cell in row.split('&')]
+        
+        # Skip empty rows
+        if not any(cell for cell in cells):
+            continue
+        
+        table_data.append(cells)
+    
+    if not table_data:
+        return "No table data found"
+    
+    # Build markdown table
+    md = ""
+    if caption:
+        md += f"\n**{caption}**\n\n"
+    
+    # Find maximum number of columns
+    max_cols = max(len(row) for row in table_data)
+    
+    # Header row (usually first row with content)
+    if table_data:
+        header = table_data[0]
+        # Pad with empty cells if needed
+        header = header + [''] * (max_cols - len(header))
+        md += '| ' + ' | '.join(header) + ' |\n'
+        md += '| ' + ' | '.join(['---'] * max_cols) + ' |\n'
+        
+        # Data rows
+        for row in table_data[1:]:
+            # Pad with empty cells if needed
+            row = row + [''] * (max_cols - len(row))
+            md += '| ' + ' | '.join(row) + ' |\n'
+    
+    if footnote:
+        md += f"\n*{footnote}*\n"
+    
+    return md
+
+def display_table_conditional(table_path, caption="", label=""):
+    """
+    Display a table that works for both HTML and PDF output
+    
+    Args:
+        table_path (str): Path to the LaTeX table file
+        caption (str): Table caption (for HTML)
+        label (str): Table label (for PDF)
+        
+    Returns:
+        str: Markdown/HTML content for the table
+    """
+    table_path = Path(table_path)
+    
+    if not table_path.exists():
+        return f"**Table not found:** {table_path}"
+    
+    with open(table_path, 'r', encoding='utf-8') as f:
+        tex_content = f.read()
+    
+    # For HTML output, use HTML tables (better styling)
+    # For DOCX, use markdown tables (better compatibility)
+    # Check if we're in a Quarto context and try to detect format
+    try:
+        # Try to use Quarto metadata to detect format
+        import IPython
+        display = IPython.display
+        # For now, return markdown which works for both
+        markdown_table = latex_table_to_markdown(tex_content)
+        return markdown_table
+    except:
+        # Fallback to markdown
+        markdown_table = latex_table_to_markdown(tex_content)
+        return markdown_table
+```
+
+::: {.content-visible when-format="docx"}
+```{=openxml}
+<w:p>
+  <w:r>
+    <w:br w:type="page"/>
+  </w:r>
+</w:p>
+```
+:::
+
+# Executive Summary
+
+This report presents the results of our data analysis using the IPA Stata Template, which integrates best practices from IPA's Data Cleaning Guide, Data Carpentry Stata Economics curriculum, and modern reproducible research workflows. The analysis pipeline combines traditional econometric methods with state-of-the-art reproducibility tools including statacons for dependency management, ipaplots for IPA-branded visualizations, and Python/Jupyter integration for dynamic report generation.
+
+## Key Findings
+
+- **Strong Educational Returns**: Robust evidence of 3.7-4.3% income returns per year of education across all model specifications
+- **Complex Gender Dynamics**: Gender income gaps show specification sensitivity, ranging from 1.2% to 16.5%, with evidence of age-interaction effects
+- **Lifecycle Patterns**: Quadratic age-income relationship demonstrates classic human capital accumulation and depreciation patterns
+- **Methodological Excellence**: Comprehensive robustness testing and automated reproducible workflow ensures research transparency and reliability
+
+```{=html}
+<hr>
+```
+
+# Introduction
+
+This analysis demonstrates the implementation of reproducible research practices using a comprehensive Stata workflow that integrates:
+
+- **IPA Data Standards**: Following IPA's data cleaning and management guidelines
+- **Data Carpentry Methods**: Research-grade programming techniques for data exploration and analysis
+- **Modern Workflow Tools**: statacons for dependency management, ipaplots for visualization
+- **Reproducible Reporting**: Quarto with Python/Jupyter integration for dynamic, programmable reports
+- **Environment Management**: uv virtual environment ensuring reproducible Python dependencies
+
+The template ensures that all results can be reproduced from raw data through a single command, meeting the highest standards for research transparency and reproducibility.
+
+```{=html}
+<hr>
+```
+
+# Data collection
+
+Data collection was conducted to gather the information required for the analysis and evaluation of the program. This process included the implementation of structured instruments such as surveys and/or administrative data extraction, targeting the relevant study population during the specified fieldwork period. Data were collected following standardized protocols to ensure consistency across respondents and locations, with quality control measures in place such as enumerator training, supervision, and routine data checks. Any challenges encountered during fieldwork, including non-response or logistical constraints, were documented and addressed to maintain the reliability of the final dataset.
+
+```{=html}
+<hr>
+```
+
+# Data and Methodology
+
+## Data Sources
+
+Our analysis uses [describe your data sources here]. The data processing pipeline follows IPA best practices and Data Carpentry methodologies:
+
+1. **Data Exploration**: Comprehensive inspection using Data Carpentry techniques
+2. **Quality Assessment**: Systematic validation with automated quality checks
+3. **Data Transformation**: Advanced variable creation and standardization
+4. **Data Combination**: Professional merge/append workflows when applicable
+
+## Sample Description
+
+```{python}
+#| label: check-outputs
+#| output: asis
+
+output_status = check_outputs()
+tables_exist = (tables_path / "descriptive_stats.tex").exists()
+figures_exist = (figures_path / "figure1_income_distribution.pdf").exists()
+
+```
+
+The analysis sample consists of 30 observations after applying data quality filters and sample restrictions. The following table presents descriptive statistics for key variables in our analysis:
+
+::: {.content-visible unless-format="pdf"}
+```{python}
+#| output: asis
+
+html_output = display_table_conditional(
+    tables_path / "descriptive_stats.tex",
+    caption="Descriptive statistics for the full analysis sample"
+)
+print(html_output)
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{=latex}
+\input{outputs/tables/descriptive_stats.tex}
+```
+:::
+
+: Descriptive statistics for the full analysis sample {#tbl-descriptive-stats}
+
+*Statistics include mean, standard deviation, minimum, maximum, and observation counts for key variables used in the econometric analysis.*
+
+### Summary Statistics by Gender
+
+To understand potential differences in our key variables by gender, the following table presents summary statistics separately for male and female respondents:
+
+::: {.content-visible unless-format="pdf"}
+```{python}
+#| output: asis
+
+html_output = display_table_conditional(
+    tables_path / "descriptive_by_gender.tex",
+    caption="Descriptive statistics by gender"
+)
+print(html_output)
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{=latex}
+\input{outputs/tables/descriptive_by_gender.tex}
+```
+:::
+
+: Descriptive statistics by gender {#tbl-descriptive-gender}
+
+*This breakdown helps identify potential gender differences in income, age, and education that inform our main regression analysis.*
+
+### Variable Correlations
+
+The following correlation matrix shows the relationships between our main analysis variables, providing insight into potential multicollinearity before proceeding to multivariate analysis:
+
+::: {.content-visible unless-format="pdf"}
+```{python}
+#| output: asis
+
+html_output = display_table_conditional(
+    tables_path / "correlations.tex",
+    caption="Correlation matrix for main analysis variables"
+)
+print(html_output)
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{=latex}
+\input{outputs/tables/correlations.tex}
+```
+:::
+
+: Correlation matrix for main analysis variables {#tbl-correlations}
+
+*Strong correlations may indicate potential multicollinearity concerns addressed in our regression diagnostics.*
+
+## Methodology
+
+Our empirical approach follows standard practices in development economics research:
+
+- **Descriptive Analysis**: Comprehensive summary statistics and data exploration
+- **Main Specification**: [Describe your main econometric model]
+- **Robustness Checks**: Alternative specifications and sensitivity analysis
+- **Visualization**: Publication-quality figures using IPA branding standards
+
+```{=html}
+<hr>
+```
+
+# Results
+
+## Data Visualization and Distribution Analysis
+
+### Income Distribution by Gender
+
+@fig-income-distribution shows the distribution of log income by gender in our analysis sample. The figure was generated using the ipaplots theme to maintain IPA branding consistency.
+
+```{python}
+#| label: fig-income-distribution
+#| output: asis
+
+figure_md = display_figure_conditional(
+    "figure1_income_distribution",
+    "Distribution of Log Income by Gender",
+    "#fig-income-distribution"
+)
+print(figure_md)
+```
+
+*Figure 1: Histogram showing the distribution of log income separately for male and female respondents. The overlapping distributions allow for visual comparison of income patterns by gender, revealing the empirical basis for our regression analysis.*
+
+The income distribution reveals relatively similar patterns between genders, with both showing approximately normal distributions in log space. This supports the use of log-linear regression models in our main analysis.
+
+## Main Regression Results
+
+The following table presents our comprehensive regression analysis examining the relationship between log income and key demographic variables. We present three progressive model specifications to demonstrate robustness and provide insights into different aspects of the income-generating process.
+
+::: {.content-visible unless-format="pdf"}
+```{python}
+#| output: asis
+
+html_output = display_table_conditional(
+    tables_path / "main_results.tex",
+    caption="Main regression results showing three model specifications"
+)
+print(html_output)
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{=latex}
+\input{outputs/tables/main_results.tex}
+```
+:::
+
+: Main regression results showing three model specifications {#tbl-main-results}
+
+*Model 1 provides the basic relationship, Model 2 adds controls and quadratic age terms, and Model 3 includes interaction effects. All models use robust standard errors.*
+
+### Model Interpretation
+
+**Model 1 (Basic Specification)**: The basic model shows a small negative but statistically insignificant gender coefficient (-0.012), suggesting that after controlling for age, female respondents have slightly lower log income, but this difference is not statistically meaningful.
+
+**Model 2 (Extended Controls)**: Adding education and quadratic age terms improves model fit substantially (R² = 0.973). The quadratic age specification captures lifecycle earnings patterns, while education shows strong positive returns (coefficient = 0.037, p < 0.01).
+
+**Model 3 (Interaction Effects)**: Including gender-age interactions reveals that the gender gap may vary with age, though the interaction term is not statistically significant at conventional levels.
+
+### Key Findings
+
+- **Gender Effect**: The gender coefficient ranges from -0.012 to -0.165 across specifications, suggesting female respondents earn 1.2% to 16.5% less than male respondents, though statistical significance varies by model
+- **Age Effect**: Strong positive relationship with income, with evidence of diminishing returns (negative quadratic term in Model 2)
+- **Education Effect**: Robust positive returns to education (~3.7-4.3% per additional year), consistent across specifications
+
+## Coefficient Visualization
+
+@fig-coefficients provides a visual representation of our main regression coefficients, making it easy to assess both effect sizes and statistical precision across our three model specifications.
+
+```{python}
+#| label: fig-coefficients
+#| output: asis
+
+figure_md = display_figure_conditional(
+    "figure2_coefficients",
+    "Regression Coefficients with Confidence Intervals",
+    "#fig-coefficients"
+)
+print(figure_md)
+```
+
+*Figure 2: Coefficient plot showing estimated effects and 95% confidence intervals for key variables across different model specifications. This visualization facilitates comparison of effect sizes and statistical significance.*
+
+## Robustness Analysis
+
+To ensure the reliability of our findings, we conducted extensive robustness checks examining alternative functional forms, estimation methods, and sample definitions.
+
+### Alternative Functional Forms
+
+The following table presents results using different functional form assumptions, including linear specifications, semi-log models, and flexible age specifications.
+
+::: {.content-visible unless-format="pdf"}
+```{python}
+#| output: asis
+
+html_output = display_table_conditional(
+    tables_path / "robustness_functional_forms.tex",
+    caption="Robustness checks using alternative functional forms"
+)
+print(html_output)
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{=latex}
+\input{outputs/tables/robustness_functional_forms.tex}
+```
+:::
+
+: Robustness checks using alternative functional forms {#tbl-robustness-functional}
+
+*Includes linear income models, quadratic age specifications, and spline models to test sensitivity to functional form assumptions.*
+
+### Quantile Regression Analysis
+
+To examine whether our results hold across the income distribution, we estimated quantile regressions at the 25th, 50th, and 75th percentiles:
+
+::: {.content-visible unless-format="pdf"}
+```{python}
+#| output: asis
+
+html_output = display_table_conditional(
+    tables_path / "robustness_quantile.tex",
+    caption="Quantile regression results across income distribution"
+)
+print(html_output)
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{=latex}
+\input{outputs/tables/robustness_quantile.tex}
+```
+:::
+
+: Quantile regression results across income distribution {#tbl-robustness-quantile}
+
+*This analysis reveals whether gender and education effects vary across income levels.*
+
+### Subsample Analysis
+
+The following table examines whether our main findings hold when estimated separately for different demographic groups:
+
+::: {.content-visible unless-format="pdf"}
+```{python}
+#| output: asis
+
+html_output = display_table_conditional(
+    tables_path / "robustness_subsamples.tex",
+    caption="Subsample analysis by demographic groups"
+)
+print(html_output)
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{=latex}
+\input{outputs/tables/robustness_subsamples.tex}
+```
+:::
+
+: Subsample analysis by demographic groups {#tbl-robustness-subsamples}
+
+*Separate regressions for male/female respondents and younger/older age groups test whether our pooled results mask important heterogeneity.*
+
+### Robustness Summary
+
+The robustness checks confirm several key findings:
+
+1. **Functional Form Stability**: Results are consistent across linear and log-linear specifications
+2. **Distributional Effects**: Gender gaps appear largest at the median of the income distribution
+3. **Age Heterogeneity**: Education returns are particularly strong for younger workers
+4. **Gender-Specific Patterns**: Both male and female subsamples show positive education returns, though magnitudes differ
+
+## Regression Diagnostics
+
+### Residual Analysis
+
+To validate our model assumptions, we examine residual patterns and distributional properties.
+
+```{python}
+#| label: fig-residuals
+#| output: asis
+
+figure_md = display_figure_conditional(
+    "figure3_residuals_fitted",
+    "Residuals vs Fitted Values Diagnostic Plot",
+    "#fig-residuals"
+)
+print(figure_md)
+```
+
+*Figure 3: Residuals plotted against fitted values with lowess smoother (red line). The relatively flat red line around zero suggests that our linear model specification is appropriate and there are no systematic patterns in the residuals.*
+
+### Normality Assessment
+
+```{python}
+#| label: fig-qq-plot
+#| output: asis
+
+figure_md = display_figure_conditional(
+    "figure3_qq_plot",
+    "Q-Q Plot for Residual Normality",
+    "#fig-qq-plot"
+)
+print(figure_md)
+```
+
+*Figure 4: Quantile-quantile plot comparing residual distribution to theoretical normal distribution. Points following the diagonal line indicate normally distributed residuals, supporting the validity of our statistical inference.*
+
+### Coefficient Stability
+
+```{python}
+#| label: fig-stability
+#| output: asis
+
+figure_md = display_figure_conditional(
+    "figure4_coefficient_stability",
+    "Coefficient Stability Across Specifications",
+    "#fig-stability"
+)
+print(figure_md)
+```
+
+*Figure 5: Visualization showing how key coefficients change across different model specifications and robustness checks. Stability across specifications increases confidence in our findings.*
+
+## Summary Visualization
+
+```{python}
+#| label: fig-combined-summary
+#| output: asis
+
+figure_md = display_figure_conditional(
+    "combined_summary",
+    "Combined Analysis Summary",
+    "#fig-combined-summary"
+)
+print(figure_md)
+```
+
+*Figure 6: Comprehensive summary visualization combining key results from descriptive analysis, main regressions, and robustness checks. This multi-panel figure provides a complete overview of our empirical findings.*
+
+---
+
+# Discussion
+
+## Interpretation of Results
+
+Our comprehensive analysis of income determinants reveals several important patterns:
+
+### Gender and Income
+
+The gender coefficients across our specifications suggest a complex relationship between gender and income. While the basic specification shows a small, statistically insignificant gender gap, more complex models reveal larger differences that may be context-dependent. The interaction models suggest that gender gaps may vary with age, highlighting the importance of lifecycle considerations in gender wage analysis.
+
+### Returns to Education
+
+Perhaps the most robust finding across all specifications is the strong positive return to education, with estimates ranging from 3.7% to 4.3% per additional year of schooling. This finding is:
+
+1. **Economically Significant**: Returns are substantial and consistent with human capital theory
+2. **Statistically Robust**: Significant across all model specifications and robustness checks
+3. **Policy Relevant**: Suggests education investments yield substantial economic returns
+
+### Age-Income Profiles
+
+The quadratic age specification in Model 2 captures classic lifecycle earnings patterns, with positive but diminishing returns to age. This is consistent with human capital accumulation early in careers followed by depreciation or career plateaus later in life.
+
+## Policy Implications
+
+1. **Education Investment**: Strong returns to education suggest that educational investments, particularly for underrepresented groups, could yield substantial economic benefits
+2. **Gender Equity**: While gender gaps appear modest in our sample, targeted interventions may still be warranted, especially given variation across age groups
+3. **Lifecycle Considerations**: Age-varying returns suggest that timing of interventions matters for maximizing impact
+
+## Methodological Contributions
+
+This analysis demonstrates the value of:
+
+1. **Comprehensive Robustness Testing**: Multiple specifications and diagnostic tests increase confidence in findings
+2. **Visualization**: Graphical presentation of results enhances interpretation and communication
+3. **Reproducible Workflows**: The automated pipeline ensures results can be verified and extended
+
+## Limitations
+
+Several limitations should be considered when interpreting these results:
+
+- **Sample Size**: With only 30 observations, our statistical power is limited, particularly for detecting smaller effects
+- **Cross-Sectional Design**: We cannot establish causal relationships or account for unobserved heterogeneity
+- **Variable Measurement**: Income and education measures may not capture all relevant dimensions of economic well-being
+- **Selection Issues**: Our sample may not be representative of the broader population
+
+## Future Research
+
+This analysis opens several avenues for future research:
+
+- **Longitudinal Analysis**: Panel data would allow for better identification of causal effects
+- **Mechanism Studies**: Understanding the pathways through which education affects income
+- **Policy Evaluation**: Experimental or quasi-experimental evaluation of education interventions
+- **Intersectionality**: Examining how gender effects vary by other demographic characteristics
+
+```{=html}
+<hr>
+```
+
+# Conclusion
+
+This comprehensive analysis of income determinants demonstrates the power of rigorous empirical methods combined with reproducible research practices. Using a dataset of 30 observations, we conducted a thorough examination of the relationships between gender, age, education, and income through multiple complementary approaches.
+
+## Key Findings
+
+Our analysis reveals three main findings:
+
+1. **Strong Education Returns**: Across all model specifications and robustness checks, we find consistent evidence of substantial returns to education (3.7-4.3% per year), highlighting education's role as a key driver of economic outcomes.
+
+2. **Complex Gender Patterns**: Gender effects on income show sensitivity to model specification, with evidence suggesting that gender gaps may vary with age and other demographic factors, warranting nuanced policy approaches.
+
+3. **Lifecycle Effects**: The quadratic relationship between age and income captures important lifecycle dynamics in earnings, with implications for optimal timing of human capital investments.
+
+## Methodological Contributions
+
+This project demonstrates the value of integrating traditional econometric analysis with modern reproducible research tools:
+
+- **Complete Automation**: The entire analysis pipeline from raw data to final report can be executed with a single command
+- **Comprehensive Testing**: Multiple model specifications, robustness checks, and diagnostic tests increase confidence in findings
+- **Transparent Reporting**: All code, data processing steps, and analytical decisions are documented and reproducible
+- **Professional Visualization**: Publication-quality figures and tables follow IPA branding standards
+
+## Research Impact
+
+The reproducible workflow implemented in this project establishes a new standard for empirical research in development economics. By combining IPA's data management best practices with cutting-edge computational tools (statacons, Quarto, Python integration), we demonstrate how researchers can achieve both analytical rigor and complete transparency.
+
+This approach ensures that all results can be verified, critiqued, and extended by future researchers, contributing to the cumulative progress of social science research and meeting the highest standards for research integrity and reproducibility.
+
+```{=html}
+<hr>
+```
+
+# Technical Appendix
+
+## Reproducibility Information
+
+This report was generated using the IPA Stata Template, which integrates:
+
+```{python}
+#| output: asis
+
+import subprocess
+import sys
+from datetime import date
+
+print("- **Python Version**: " + sys.version.split()[0])
+print("- **Analysis Date**: " + str(date.today()))
+print("- **Template Version**: 0.1.0")
+print("- **Dependencies**: statacons, ipaplots, estout, reghdfe")
+
+# Try to get Stata version if available
+try:
+    # This would need to be adapted based on your Stata setup
+    print("- **Environment**: uv virtual environment with Jupyter integration")
+except:
+    print("- **Environment**: uv virtual environment with Jupyter integration")
+```
+
+## Replication Instructions
+
+To replicate this analysis:
+
+1. **Environment Setup**:
+
+   ```bash
+   just get-started
+   ```
+
+2. **Run Complete Analysis**:
+
+   ```bash
+   just stata-full
+   ```
+
+3. **Generate Report**:
+
+   ```bash
+   just render-report
+   ```
+
+All code and data are available in the project repository following IPA's data sharing guidelines.
+
+## Data Processing Log Summary
+
+```{python}
+#| output: asis
+
+def summarize_logs():
+    """Summarize log files from Stata analysis"""
+    if logs_path.exists():
+        log_files = list(logs_path.glob("*.log"))
+
+        if log_files:
+            print("### Analysis Log Summary\n")
+            for log_file in log_files:
+                stat = log_file.stat()
+                modified_time = datetime.fromtimestamp(stat.st_mtime)
+                print(f"- **{log_file.name}**: Last modified {modified_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        else:
+            print("No log files found. Run analysis to generate logs.")
+    else:
+        print("Log directory not found. Run 'just stata-full' to generate analysis logs.")
+
+summarize_logs()
+```
+
+---
+
+# References
+
+::: {#refs}
+:::
+
+---
+
+*This report was generated using the IPA Stata Template for Reproducible Research. The template integrates IPA data standards, Data Carpentry best practices, and modern reproducible research tools. For more information, see the project documentation.*
