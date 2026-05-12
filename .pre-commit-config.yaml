@@ -21,6 +21,7 @@ repos:
     rev: v2.4.1
     hooks:
       - id: codespell
+        exclude: ^documentation/PROYECTO\.md$
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2
     rev: v0.20.0

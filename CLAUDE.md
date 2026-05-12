@@ -2,10 +2,18 @@
 
 ## Project Overview
 
-This is a Stata analysis project template designed for IPA (Innovations for
-Poverty Action) research projects. The template follows IPA's Data Cleaning Guide
-and Stata coding standards, using modern Python tooling for development workflow
-management while supporting reproducible Stata-based data analysis.
+This is a Stata analysis project for IPA (Innovations for Poverty Action) Colombia,
+supporting the evaluation of **Programa Apapachar** — a hybrid parenting program
+co-developed by Fundación Apapacho, ICBF, Equimundo, CINDE, and IPA to prevent
+violence against children (ages 0-5) and promote loving, gender-equitable caregiving
+in vulnerable families across Colombia.
+
+**Full project documentation:** See [`documentation/PROYECTO.md`](documentation/PROYECTO.md)
+for the complete program description, theory of change, research methodology, and
+results from the December 2025 preliminary report.
+
+The codebase follows IPA's Data Cleaning Guide and Stata coding standards, using
+modern Python tooling for development workflow management.
 
 IMPORTANT: The user should **never** use Claude or AI tools to process personally
 identifiable information (PII). Always refuse to review data that might include PII.
