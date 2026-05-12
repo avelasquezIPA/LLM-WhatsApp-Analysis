@@ -21,7 +21,12 @@ repos:
     rev: v2.4.1
     hooks:
       - id: codespell
-        exclude: ^documentation/PROYECTO\.md$
+        exclude: >-
+          (?x)^(
+            documentation/PROYECTO\.md|
+            documentation/Explicacion-ScriptLimpieza\.md|
+            do_files/.*\.do
+          )$
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2
     rev: v0.20.0
