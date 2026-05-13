@@ -25,6 +25,7 @@ repos:
           (?x)^(
             documentation/PROYECTO\.md|
             documentation/Explicacion-ScriptLimpieza\.md|
+            documentation/s41598-025-13560-9\.md|
             do_files/.*\.do
           )$
 
@@ -32,7 +33,11 @@ repos:
     rev: v0.20.0
     hooks:
       - id: markdownlint-cli2
-        exclude: ^\.claude/
+        exclude: >-
+          (?x)^(
+            \.claude/|
+            documentation/s41598-025-13560-9\.md
+          )$
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.11
