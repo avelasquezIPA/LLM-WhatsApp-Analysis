@@ -26,6 +26,7 @@ repos:
             documentation/PROYECTO\.md|
             documentation/Explicacion-ScriptLimpieza\.md|
             documentation/s41598-025-13560-9\.md|
+            documentation/llm-whatsapp-pipeline\.md|
             do_files/.*\.do
           )$
 
@@ -36,7 +37,8 @@ repos:
         exclude: >-
           (?x)^(
             \.claude/|
-            documentation/s41598-025-13560-9\.md
+            documentation/s41598-025-13560-9\.md|
+            documentation/llm-whatsapp-pipeline\.md
           )$
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
