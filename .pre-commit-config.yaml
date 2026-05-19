@@ -21,13 +21,25 @@ repos:
     rev: v2.4.1
     hooks:
       - id: codespell
-        exclude: ^documentation/PROYECTO\.md$
+        exclude: >-
+          (?x)^(
+            documentation/PROYECTO\.md|
+            documentation/Explicacion-ScriptLimpieza\.md|
+            documentation/s41598-025-13560-9\.md|
+            documentation/llm-whatsapp-pipeline\.md|
+            do_files/.*\.do
+          )$
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2
     rev: v0.20.0
     hooks:
       - id: markdownlint-cli2
-        exclude: ^\.claude/
+        exclude: >-
+          (?x)^(
+            \.claude/|
+            documentation/s41598-025-13560-9\.md|
+            documentation/llm-whatsapp-pipeline\.md
+          )$
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.11
