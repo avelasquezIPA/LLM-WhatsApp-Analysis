@@ -28,7 +28,7 @@ repos:
             documentation/Explicacion-ScriptLimpieza\.md|
             documentation/s41598-025-13560-9\.md|
             documentation/llm-whatsapp-pipeline\.md|
-            do_files/.*\.do
+            scripts/do_files/.*\.do
           )$
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2
