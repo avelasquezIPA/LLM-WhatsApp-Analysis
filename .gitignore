@@ -231,7 +231,6 @@ outputs/**/*.md
 *~
 *.gph
 *signature
-*.dta
 
 # Stata Log Files
 *.log
