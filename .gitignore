@@ -212,6 +212,8 @@ __marimo__/
 # data/final/*.dta
 data/temp/
 data/processed/
+data/clean/
+data/vectorstore/
 
 # Analysis Outputs
 outputs/**/*.pdf
@@ -221,6 +223,7 @@ outputs/**/*.jpeg
 outputs/**/*.tex
 outputs/**/*.txt
 outputs/**/*.csv
+outputs/**/*.xlsx
 outputs/**/*.md
 # tables/
 # figures/
@@ -231,6 +234,9 @@ outputs/**/*.md
 *~
 *.gph
 *signature
+
+# Microsoft Office lock files
+~$*
 
 # Stata Log Files
 *.log
@@ -258,4 +264,7 @@ do_files/demo/*.html
 do_files/demo/nbstata-demo_files/
 reports/*.html
 reports/**/**_files/
+
+# Logo copies in subdirectories (original lives in documentation/Process/)
+documentation/Programa/IPA-primary-color-RGB.png
 ado/

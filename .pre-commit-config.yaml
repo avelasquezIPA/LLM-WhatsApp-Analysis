@@ -24,11 +24,16 @@ repos:
         exclude: >-
           (?x)^(
             README\.md|
-            documentation/PROYECTO\.md|
-            documentation/Explicacion-ScriptLimpieza\.md|
-            documentation/s41598-025-13560-9\.md|
-            documentation/llm-whatsapp-pipeline\.md|
-            scripts/do_files/.*\.do
+            documentation/Programa/PROYECTO\.md|
+            documentation/Process/Explicacion-ScriptLimpieza\.md|
+            documentation/Papers/s41598-025-13560-9\.md|
+            documentation/Process/llm-whatsapp-pipeline\.md|
+            documentation/Process/llm-anto-process\.md|
+            documentation/Process/LLM-ResultsSummary\.md|
+            documentation/Process/aplicacion-dedios-apapachar\.md|
+            documentation/Papers/dedios-sanguineti-et-al-2025\.md|
+            scripts/do_files/.*\.do|
+            scripts/python_scripts/.*\.py
           )$
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2
@@ -38,8 +43,9 @@ repos:
         exclude: >-
           (?x)^(
             \.claude/|
-            documentation/s41598-025-13560-9\.md|
-            documentation/llm-whatsapp-pipeline\.md
+            documentation/Papers/s41598-025-13560-9\.md|
+            documentation/Process/llm-whatsapp-pipeline\.md|
+            documentation/Papers/dedios-sanguineti-et-al-2025\.md
           )$
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
