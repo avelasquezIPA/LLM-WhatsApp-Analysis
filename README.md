@@ -20,14 +20,16 @@ un nuevo proyecto solo necesita editar `config.yaml`.
 ## Índice
 
 1. [¿Qué hace este pipeline?](#qué-hace-este-pipeline)
-2. [Inicio rápido](#inicio-rápido)
-3. [El Programa Apapáchar (implementación de referencia)](#el-programa-apapáchar-implementación-de-referencia)
-4. [Pipeline completo paso a paso](#pipeline-completo-paso-a-paso)
-5. [Adaptar a un nuevo proyecto](#adaptar-a-un-nuevo-proyecto)
-6. [Estructura del repositorio](#estructura-del-repositorio)
-7. [Configuración del entorno](#configuración-del-entorno)
-8. [Privacidad y clasificación de datos](#privacidad-y-clasificación-de-datos)
-9. [Referencias](#referencias)
+2. [Prerequisitos](#prerequisitos)
+3. [Prueba rápida con datos de demo](#prueba-rápida-con-datos-de-demo)
+4. [Inicio rápido](#inicio-rápido)
+5. [El Programa Apapáchar (implementación de referencia)](#el-programa-apapáchar-implementación-de-referencia)
+6. [Pipeline completo paso a paso](#pipeline-completo-paso-a-paso)
+7. [Adaptar a un nuevo proyecto](#adaptar-a-un-nuevo-proyecto)
+8. [Estructura del repositorio](#estructura-del-repositorio)
+9. [Configuración del entorno](#configuración-del-entorno)
+10. [Privacidad y clasificación de datos](#privacidad-y-clasificación-de-datos)
+11. [Referencias](#referencias)
 
 ---
 
@@ -49,32 +51,109 @@ El pipeline combina **Stata** (limpieza y remoción de PII) con **Python**
 
 ---
 
-## Inicio rápido
+## Prerequisitos
+
+Antes de correr cualquier paso:
+
+| Requisito | Para qué | Cómo instalar |
+| --- | --- | --- |
+| Python 3.12+ | Todo el pipeline Python | [python.org](https://www.python.org/downloads/) |
+| `uv` | Gestor de entorno y dependencias | `pip install uv` |
+| Anthropic API key | Pasos 5b, 6 y 10c (Claude) | [console.anthropic.com](https://console.anthropic.com/) |
+| Stata 17+ | Solo paso 0 (remoción de PII) | Licencia institucional |
+
+Los pasos 1–10f son 100% Python. Stata **solo es necesario** si tu dataset
+aún contiene PII (paso 0).
+
+---
+
+## Prueba rápida con datos de demo
+
+El repositorio incluye un dataset de **mensajes ficticios** (`DatosEjemplos-FalsePII.dta`,
+143 mensajes) para verificar que el pipeline funciona antes de usar datos reales.
+
+### 1. Instalar dependencias
 
 ```bash
-# 1. Clonar el repositorio
 git clone <url-del-repo>
 cd LLM-Apapachar
+uv sync
+```
 
-# 2. Instalar dependencias Python
+### 2. Configurar API key
+
+```bash
+# Crear archivo .env en la raíz del proyecto
+echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
+```
+
+### 3. Apuntar config.yaml al dataset de demo
+
+En `config.yaml`, cambiar la ruta del archivo de entrada:
+
+```yaml
+data:
+  input:
+    raw_stata_file: "data/raw/DatosEjemplos-FalsePII.dta"   # <-- demo
+```
+
+### 4. Correr el pipeline mínimo
+
+Los pasos obligatorios para obtener resúmenes y un mapa semántico:
+
+```bash
+cd scripts/python_scripts
+
+uv run python 02_preprocessing.py    # limpieza de texto
+uv run python 03_chunking.py         # agrupar mensajes
+uv run python 04_embeddings.py       # generar vectores (descarga modelo ~400 MB la primera vez)
+uv run python 06_summarization.py    # resumir con Claude (~$0.05 con el dataset demo)
+uv run python 07_similarity_map.py   # mapa de similitud semántica
+```
+
+**Outputs esperados:**
+
+```text
+outputs/tables/06a_resumenes_chunks.csv   — resumen por grupo × semana
+outputs/tables/06c_resumen_ejecutivo.txt  — resumen ejecutivo del programa
+outputs/figures/07_similarity_heatmap.png — mapa de calor semántico
+```
+
+> El pipeline mínimo **no requiere Stata**. Los datos de demo ya están limpios de PII.
+
+---
+
+## Inicio rápido
+
+Para tu propio proyecto con datos reales:
+
+```bash
+# 1. Clonar y preparar entorno
+git clone <url-del-repo>
+cd LLM-Apapachar
 uv sync
 
-# 3. Editar config.yaml con los valores de tu proyecto
+# 2. Configurar credenciales
+echo "ANTHROPIC_API_KEY=sk-ant-..."  > .env
+echo "STATA_CMD=C:\Program Files\Stata18\StataSE-64.exe" >> .env
+echo "STATA_EDITION=se" >> .env
+
+# 3. Editar config.yaml — ajustar nombres de columnas, ciudades, prompts
 #    (ver sección "Adaptar a un nuevo proyecto")
 
-# 4. Configurar credenciales en .env
-#    ANTHROPIC_API_KEY=tu_api_key
-#    STATA_CMD='C:\Program Files\Stata18\StataSE-64.exe'
-#    STATA_EDITION='se'
+# 4. Remover PII de los datos (requiere Stata)
+just stata-script 01_remove_pii
 
-# 5. Correr el pipeline completo
-just stata-script 01_remove_pii        # Stata: limpiar PII
-uv run python scripts/python_scripts/02_preprocessing.py
-uv run python scripts/python_scripts/03_chunking.py
-uv run python scripts/python_scripts/04_embeddings.py
-uv run python scripts/python_scripts/05a_clustering.py
-uv run python scripts/python_scripts/06_summarization.py
-# ... (ver pipeline completo más abajo)
+# 5. Pipeline Python (desde scripts/python_scripts/)
+uv run python 02_preprocessing.py
+uv run python 03_chunking.py
+uv run python 04_embeddings.py
+uv run python 05a_clustering.py      # opcional: clustering temático
+uv run python 06_summarization.py    # requiere ANTHROPIC_API_KEY
+uv run python 07_similarity_map.py
+uv run python 08b_citation_finder_participantes.py   # requiere árbol de códigos en config.yaml
+uv run python 10a_cadenas_interaccion.py
+uv run python 10c_codificacion.py    # requiere ANTHROPIC_API_KEY
 ```
 
 ---
