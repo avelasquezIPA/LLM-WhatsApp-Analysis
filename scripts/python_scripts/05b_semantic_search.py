@@ -91,7 +91,7 @@ def responder(
     """Responde una pregunta de investigación usando RAG.
 
     Args:
-        pregunta: Pregunta en español sobre los mensajes de Apapachar.
+        pregunta: Pregunta en español sobre los mensajes del programa.
         n_chunks: Número de chunks a recuperar como contexto (default 4).
         verbose: Si True, muestra los chunks recuperados antes de la respuesta.
 
@@ -143,7 +143,7 @@ if __name__ == "__main__":
     ]
 
     print("=" * 60)
-    print("BÚSQUEDA SEMÁNTICA - Programa Apapachar")
+    print(f"BÚSQUEDA SEMÁNTICA - {PROJECT_NAME}")
     print("=" * 60)
 
     for pregunta in preguntas_demo:

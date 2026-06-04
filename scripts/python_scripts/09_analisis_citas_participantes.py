@@ -14,17 +14,17 @@ Output:
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
+from config_loader import PROJECT_ROOT, cfg
 
 # ---------------------------------------------------------------------------
 # Configuración
 # ---------------------------------------------------------------------------
-ROOT = Path(__file__).resolve().parents[2]
+PROJECT_NAME = cfg["project"]["name"]
+ROOT = PROJECT_ROOT
 IN_PATH = ROOT / "outputs" / "tables" / "08b_citas_por_codigo_participantes.xlsx"
 OUT_FIGURES = ROOT / "outputs" / "figures"
 OUT_TABLES = ROOT / "outputs" / "tables"
@@ -84,8 +84,8 @@ print("\nGenerando figura A...")
 
 fig, axes = plt.subplots(1, 3, figsize=(16, 6))
 fig.suptitle(
-    "Distribución de citas por género, ciudad y familia de código\n"
-    "Programa Apapachar - Solo participantes",
+    f"Distribución de citas por género, ciudad y familia de código\n"
+    f"{PROJECT_NAME} - Solo participantes",
     fontsize=13,
     y=1.01,
 )

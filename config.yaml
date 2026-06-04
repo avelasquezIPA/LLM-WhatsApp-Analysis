@@ -135,10 +135,10 @@ models:
 # directorio de vectorstore.
 # =============================================================================
 vectordb:
-  collection_chunks: "apapachar_chunks"
-  collection_messages: "apapachar_mensajes"
-  collection_chunks_participants: "apapachar_chunks_part"
-  collection_messages_participants: "apapachar_mensajes_part"
+  collection_chunks: "llm_wa_chunks"
+  collection_messages: "llm_wa_mensajes"
+  collection_chunks_participants: "llm_wa_chunks_part"
+  collection_messages_participants: "llm_wa_mensajes_part"
   distance_metric: "cosine"
 
 

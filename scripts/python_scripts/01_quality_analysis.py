@@ -32,6 +32,8 @@ DATA_PATH = PROJECT_ROOT / cfg["data"]["input"]["raw_stata_file"]
 OUT_TABLES = TABLES_DIR
 OUT_FIGURES = FIGURES_DIR
 
+PROJECT_NAME = cfg["project"]["name"]
+
 COL_TYPE = cfg["data"]["columns"]["message_type"]
 COL_TEXT = cfg["data"]["columns"]["message_text"]
 COL_SENDER = cfg["data"]["columns"]["sender"]
@@ -367,7 +369,7 @@ print("\nTablas guardadas en outputs/tables/")
 
 # Figura 1: Distribución de longitud (palabras)
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-fig.suptitle("Distribución de longitud de mensajes - Apapachar", fontsize=13)
+fig.suptitle(f"Distribución de longitud de mensajes - {PROJECT_NAME}", fontsize=13)
 
 axes[0].hist(
     txt[COL_NWORDS].clip(upper=100), bins=40, color="#1976D2", edgecolor="white"
@@ -396,7 +398,7 @@ plt.close()
 # Figura 2: Mensajes por semana y ciudad
 pivot = chunks.pivot(index=COL_WEEK, columns=COL_CITY, values="n_mensajes").fillna(0)
 pivot.plot(kind="bar", figsize=(12, 5), colormap="tab10", edgecolor="white")
-plt.title("Mensajes de texto por semana y ciudad - Apapachar")
+plt.title(f"Mensajes de texto por semana y ciudad - {PROJECT_NAME}")
 plt.xlabel("Semana del programa")
 plt.ylabel("Número de mensajes")
 plt.xticks(rotation=0)
@@ -409,7 +411,7 @@ plt.close()
 # Clippeamos outliers extremos (<0) solo para la visualización
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 fig.suptitle(
-    "Legibilidad Flesch-Kincaid - Todos los mensajes (sin URLs ni emojis) - Apapachar",
+    f"Legibilidad Flesch-Kincaid - Todos los mensajes (sin URLs ni emojis) - {PROJECT_NAME}",
     fontsize=12,
 )
 

@@ -34,6 +34,7 @@ OUT_FIGURES = FIGURES_DIR
 OUT_TABLES = TABLES_DIR
 
 COLECCION_NOMBRE = cfg["vectordb"]["collection_chunks"]
+PROJECT_NAME = cfg["project"]["name"]
 KMEANS_RANGE = range(
     cfg["analysis"]["clustering"]["kmeans_range"][0],
     cfg["analysis"]["clustering"]["kmeans_range"][1] + 1,
@@ -183,8 +184,8 @@ for _, row in chunks.iterrows():
     )
 
 ax.set_title(
-    "Clustering temático de chunks - Programa Apapachar\n"
-    f"KMeans k={k_optimo} | UMAP 2D | 48 chunks (ciudad x semana)",
+    f"Clustering temático de chunks - {PROJECT_NAME}\n"
+    f"KMeans k={k_optimo} | UMAP 2D | {len(chunks)} chunks",
     fontsize=12,
 )
 ax.set_xlabel("UMAP dimensión 1")

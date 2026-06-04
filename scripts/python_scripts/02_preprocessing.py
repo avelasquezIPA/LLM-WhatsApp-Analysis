@@ -6,7 +6,7 @@ Aplica limpieza mínima necesaria sobre los mensajes de texto:
 
 No se encontraron: vacíos, NaN, saltos de línea ni mensajes de sistema.
 
-Input:  data/raw/full_base_WA_clean_NOPII.dta
+Input:  data/raw/ (ruta configurada en config.yaml > data.input.raw_stata_file)
 Output: data/clean/mensajes_preprocesados.parquet
 """
 
