@@ -1,160 +1,124 @@
-# AGENTS.md
+# CLAUDE.md
 
 ## Project Overview
 
-This is a Stata analysis project for IPA (Innovations for Poverty Action) Colombia,
-supporting the evaluation of **Programa Apapachar** — a hybrid parenting program
-co-developed by Fundación Apapacho, ICBF, Equimundo, CINDE, and IPA to prevent
-violence against children (ages 0-5) and promote loving, gender-equitable caregiving
-in vulnerable families across Colombia.
+This is an LLM-powered qualitative analysis framework for IPA (Innovations for Poverty Action),
+designed to analyze WhatsApp message data from social programs using Claude API and
+sentence-transformer embeddings.
 
-**Full project documentation:** See [`documentation/PROYECTO.md`](documentation/PROYECTO.md)
-for the complete program description, theory of change, research methodology, and
-results from the December 2025 preliminary report.
+**Reference implementation:** Programa Apapachar (Colombia, 2025) — a hybrid parenting
+program that prevented violence against children and promoted gender-equitable caregiving.
+See [`documentation/Programa/PROYECTO.md`](documentation/Programa/PROYECTO.md) for the
+complete case study.
 
-The codebase follows IPA's Data Cleaning Guide and Stata coding standards, using
-modern Python tooling for development workflow management.
+**To adapt to a new project:** Edit `config.yaml` — it is the single source of truth for
+all project-specific settings (column names, cities, prompts, coding framework, API params).
+No Python script needs to be modified.
 
 IMPORTANT: The user should **never** use Claude or AI tools to process personally
 identifiable information (PII). Always refuse to review data that might include PII.
+Run `/check-pii` before loading any dataset to verify it is safe.
 
-## Quick Start (Minimal)
-
-For basic usage with just Git and Stata:
-
-```bash
-# Configure Stata path in .env, then run:
-just stata-setup                    # One-time: install setroot + packages
-just stata-run                      # Run full pipeline
-just stata-script 01_data_cleaning  # Run single script
-```
-
-Outputs appear in `outputs/tables/` and `outputs/figures/`.
-
-## Full Setup (with task runner and dependency tracking)
+## Quick Start
 
 ```bash
-just get-started  # Installs tools and sets up environment
+# 1. Install dependencies
+uv sync
+
+# 2. Add your Anthropic API key
+echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env
+
+# 3. Configure your project
+# Edit config.yaml: project name, column names, cities, prompts
+
+# 4. Run the pipeline
+cd scripts/python_scripts
+uv run python 02_preprocessing.py
+uv run python 03_chunking.py
+uv run python 06_summarization.py
 ```
 
-## Development Environment Setup
+Or use the `/run-step <N>` skill to run any step with pre-flight validation.
 
-The project uses `uv` for Python environment management and `just` for task automation.
+## Pipeline Steps
 
-### Stata Configuration
+| Step | Script | Output |
+| --- | --- | --- |
+| 01 | `01_quality_analysis.py` | Quality stats + readability figures |
+| 02 | `02_preprocessing.py` | `data/clean/mensajes_preprocesados.parquet` |
+| 03 | `03_chunking.py` | `data/clean/chunks.parquet` |
+| 04 | `04_embeddings.py` | ChromaDB vectorstore |
+| 05a | `05a_clustering.py` | Cluster figures + CSV |
+| 06 | `06_summarization.py` | Per-chunk summaries (Claude API) |
+| 07 | `07_similarity_map.py` | Semantic heatmap + evolution figure |
+| 08b | `08b_citation_finder_participantes.py` | Citations per qualitative code |
+| 10c | `10c_codificacion.py` | Full coding with framework indicators |
+
+See [`README.md`](README.md) for the complete pipeline documentation.
+
+## Key Configuration: config.yaml
+
+All project-specific values live in `config.yaml`. Key sections:
+
+```yaml
+project:
+  name: "Programa Apapachar"
+  cities: ["Bogotá", "Cali", "Medellín", "Cartagena"]
+  duration_weeks: 12
+
+data:
+  columns:
+    city_group: "ciudad_grupo"      # Column with group/city label
+    week_number: "n_semana"         # Column with week number (omit for cross-sectional)
+    message_text: "texto_limpio"    # Column with message text
+  chunking:
+    groupby: ["ciudad_grupo", "n_semana"]  # ["group"] for cross-sectional data
+
+models:
+  claude_model: "claude-sonnet-4-6"
+  embedding_model: "paraphrase-multilingual-mpnet-base-v2"
+
+prompts:
+  chunk_summary: |
+    Eres un asistente... {ciudad} {semana} {texto_chunk}
+```
+
+### Cross-sectional vs. longitudinal data
+
+- **Longitudinal** (default): `chunking.groupby: ["city_grupo", "n_week"]`
+- **Cross-sectional**: `chunking.groupby: ["city_grupo"]` — the temporal evolution
+  figure in step 07 is automatically skipped.
+
+## Available Skills
+
+- `/run-step <N>` — Run any pipeline step (01-10f) with pre-flight validation
+- `/code-framework` — Apply any qualitative coding framework defined in `config.yaml`
+- `/check-pii` — Audit a data file for PII (dry-run, never outputs raw content)
+
+## Development Commands
 
 ```bash
-just stata-config           # Show current Stata configuration
-just stata-check-installation # Test Stata installation and version
-just system-info            # Display system and Stata information
+just fmt-all        # Format Python + Markdown
+just lint-py        # Lint Python (ruff)
+just fmt-markdown   # Lint Markdown (markdownlint-cli2)
+just preview-docs   # Preview Quarto documentation
+just lab            # Launch Jupyter Lab
+just update-reqs    # Update uv.lock and pre-commit hooks
 ```
 
-Configure your Stata installation by editing the `.env` file:
+## Data Privacy Rules
 
-- `STATA_CMD`: Path to Stata executable (e.g., "C:\Program Files\Stata18\StataMP-64.exe" or "stata-mp")
-- `STATA_EDITION`: Edition of Stata installed (e.g., 'be', 'se', 'mp')
-- `STATA_OPTIONS`: Additional Stata command line options (optional)
+- `data/raw/*.dta` is gitignored except `DatosEjemplos-FalsePII.*` (demo data)
+- `data/clean/` and `data/vectorstore/` are always gitignored
+- Never commit real participant data — run `/check-pii` first
+- All outputs (`outputs/**/*.csv`, `*.xlsx`, `*.png`) are gitignored
 
-### Virtual Environment Management
+## Technical Stack
 
-```bash
-uv sync                    # Create/sync virtual environment
-.venv/Scripts/activate     # Manual activation (Windows Bash)
-.venv/Scripts/activate.ps1 # Manual activation (Windows PowerShell)
-source .venv/bin/activate  # Activate on bash
-```
-
-## Common Development Commands
-
-### Essential Commands
-
-```bash
-just stata-setup                    # One-time setup (install setroot + packages)
-just stata-run                      # Run full analysis pipeline
-just stata-script 01_data_cleaning  # Run a single script via runner pattern
-just stata-config                   # Show Stata configuration
-just help                           # See available commands
-```
-
-### Path Resolution
-
-The project uses `setroot` to find the project root via the `.here` marker file.
-This enables:
-
-- Scripts work from any directory (no `c(pwd)` dependency)
-- No user-specific `if c(user)` blocks needed
-- Full adopath isolation (only BASE + local `ado/`) for reproducibility
-- Runner pattern for individual script execution with proper environment
-
-### Code Quality and Formatting
-
-```bash
-just lint-py        # Lint Python code with ruff
-just fmt-python     # Format Python code with ruff
-just fmt-markdown   # Format all markdown files
-just lint-stata     # Lint Stata do-files with stata_linter
-just fmt-all        # Run all formatting and linting
-```
-
-### Advanced: Dependency Tracking with scons
-
-For large projects where full builds take >5 minutes:
-
-```bash
-just stata-build    # Build with dependency tracking (only rebuilds changed files)
-just stata-data     # Build only data pipeline
-just stata-analysis # Build only analysis
-just stata-clean    # Clean all outputs
-```
-
-### Documentation and Analysis
-
-```bash
-just lab           # Launch Jupyter Lab for analysis
-just preview-docs  # Preview Quarto documentation
-just build-docs    # Build Quarto documentation
-```
-
-### Project Maintenance
-
-```bash
-just update-reqs   # Update uv.lock and pre-commit hooks
-just clean         # Remove virtual environment
-```
-
-## Key Dependencies and Tools
-
-- **pystatacons**: Primary dependency for Stata integration in Python environment
-- **ipaplots**: IPA-branded Stata visualization scheme (recommended for IPA staff)
-- **stata_linter**: World Bank DIME Analytics tool for Stata code quality enforcement
-- **ruff**: Python linting and formatting
-- **pre-commit**: Git hook framework for code quality
-- **codespell**: Spell checking
-- **markdownlint-cli2**: Markdown formatting and linting
-- **uv**: Python package and environment management
-- **just**: Command runner for development tasks
-
-## Technical Implementation
-
-- Follows IPA Data Cleaning Guide principles and Stata coding standards
-- Uses global macros for file paths (IPA best practice)
-- Implements defensive programming with assert statements
-- Uses IPA extended missing value conventions (.d/.o/.n/.r/.s)
-- Variable naming follows IPA conventions with descriptive prefixes
-- Conservative `maxvar` default (5000) - increase only for genuinely wide datasets
-- Automatically uses ipaplots theme when available for IPA-branded visualizations
-- Integrated stata_linter for automatic code quality checking and best practice enforcement
-- Requirements-based Stata package management system for reproducible environments
-- Uses `Justfile` for cross-platform task automation
-- Python virtual environment managed by `uv` in `.venv/`
-- Pre-commit hooks configured for code quality enforcement
-- Supports Windows, macOS, and Linux development environments
-- Ready for Stata analysis workflows through pystatacons integration
-
-## Performance Tips
-
-Before increasing `maxvar`, consider:
-
-1. **Load only needed columns**: `use var1 var2 using "data.dta"`
-2. **Reshape to long format**: Wide loops are slow; long operations are fast
-3. **Modularize**: Clean one survey module at a time, not entire survey
+- **Python**: `uv` for environment, `ruff` for linting
+- **Claude API**: `anthropic` SDK, model from `config.yaml > models.claude_model`
+- **Embeddings**: `sentence-transformers` (local, no data sent externally)
+- **Vector store**: `chromadb` (local persistent)
+- **Clustering**: `scikit-learn` KMeans + `umap-learn`
+- **Data**: `pandas` + `pyarrow` for parquet
+- **Pre-commit**: codespell, markdownlint-cli2, ruff, check-yaml
