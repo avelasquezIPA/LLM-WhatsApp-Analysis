@@ -18,54 +18,70 @@ Uso:
   uv run python scripts/python_scripts/10f_monitoreo_inicio_semana.py
 """
 
-from pathlib import Path
-
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
+from config_loader import FIGURES_DIR, PROJECT_ROOT, TABLES_DIR, cfg
 from scipy.stats import kruskal, mannwhitneyu
+
+# ---------------------------------------------------------------------------
+# Configuración (valores leídos de config.yaml)
+# ---------------------------------------------------------------------------
+TABLES = TABLES_DIR
+FIGURES = FIGURES_DIR
+
+COL_TYPE = cfg["data"]["columns"]["message_type"]
+COL_SENDER = cfg["data"]["columns"]["sender"]
+COL_GROUP = cfg["data"]["columns"]["group_id"]
+COL_WEEK = cfg["data"]["columns"]["week_number"]
+COL_DATETIME = cfg["data"]["columns"]["datetime"]
+TEXT_TYPE = cfg["data"]["values"]["text_message_type"]
+PARTICIPANT = cfg["data"]["values"]["participant_sender"]
+FACILITATOR = cfg["data"]["values"]["facilitator_sender"]
+
+_lat_cats = cfg["analysis"]["latency_categories"]
+ORDEN = [c["label"] for c in _lat_cats] + ["Sin respuesta\nesa semana"]
+COLORES = cfg["visualization"]["colors"]["latency"]
 
 matplotlib.rcParams.update(
     {
-        "font.family": "Arial",
+        "font.family": cfg["visualization"]["font_family"],
         "font.size": 11,
         "axes.spines.top": False,
         "axes.spines.right": False,
-        "figure.dpi": 150,
+        "figure.dpi": cfg["visualization"]["dpi"],
     }
 )
 
-ROOT = Path(__file__).resolve().parents[2]
-TABLES = ROOT / "outputs" / "tables"
-FIGURES = ROOT / "outputs" / "figures"
-
 # ── Cargar datos ───────────────────────────────────────────────────────────────
-df = pd.read_parquet(ROOT / "data" / "clean" / "mensajes_preprocesados.parquet")
-df["datetime"] = pd.to_datetime(df["datetime"])
-df = df[df["tipo"] == "Mensaje en Texto"].copy()
+df = pd.read_parquet(
+    PROJECT_ROOT / cfg["data"]["intermediate"]["preprocessed_messages"]
+)
+df[COL_DATETIME] = pd.to_datetime(df[COL_DATETIME])
+df = df[df[COL_TYPE] == TEXT_TYPE].copy()
 
 df_10a = pd.read_csv(TABLES / "10a_resumen_grupos.csv")
 
 # ── Calcular latencia de primera respuesta por grupo-semana ────────────────────
 registros = []
-for (grupo, semana), gdf in df.groupby(["v_grupo", "n_week"]):
-    fac = gdf[gdf["remitente"] == "Facilitador"].sort_values("datetime")
-    part = gdf[gdf["remitente"] == "Participante"].sort_values("datetime")
+for (grupo, semana), gdf in df.groupby([COL_GROUP, COL_WEEK]):
+    fac = gdf[gdf[COL_SENDER] == FACILITATOR].sort_values(COL_DATETIME)
+    part = gdf[gdf[COL_SENDER] == PARTICIPANT].sort_values(COL_DATETIME)
 
     if len(fac) == 0:
         continue
 
-    t_apertura = fac["datetime"].iloc[0]
+    t_apertura = fac[COL_DATETIME].iloc[0]
 
     # Solo mensajes de participantes DESPUES de la apertura del facilitador
-    part_despues = part[part["datetime"] > t_apertura]
+    part_despues = part[part[COL_DATETIME] > t_apertura]
 
     if len(part_despues) == 0:
         horas = np.nan
     else:
-        t_primera = part_despues["datetime"].iloc[0]
+        t_primera = part_despues[COL_DATETIME].iloc[0]
         horas = (t_primera - t_apertura).total_seconds() / 3600
 
     registros.append(
@@ -93,20 +109,13 @@ df_merged["n_sesiones_pp"] = df_merged["n_sesiones_pp"].fillna(0)
 def categorizar(h):
     if pd.isna(h):
         return "Sin respuesta\nesa semana"
-    elif h <= 2:
-        return "≤ 2 h"
-    elif h <= 12:
-        return "2–12 h"
-    elif h <= 48:
-        return "12–48 h"
-    else:
-        return "> 48 h"
+    for cat in _lat_cats:
+        if cat["max_hours"] is not None and h <= cat["max_hours"]:
+            return cat["label"]
+    return _lat_cats[-1]["label"]
 
 
 df_merged["categoria"] = df_merged["horas_primera_resp"].apply(categorizar)
-
-ORDEN = ["≤ 2 h", "2–12 h", "12–48 h", "> 48 h", "Sin respuesta\nesa semana"]
-COLORES = ["#1B5E20", "#66BB6A", "#FFA726", "#EF6C00", "#B71C1C"]
 
 # Estadísticas
 print("=== Latencia de primera respuesta → Sesiones P-P ===\n")
@@ -130,14 +139,14 @@ grupos_kw = [
 stat_kw, p_kw = kruskal(*[g for g in grupos_kw if len(g) > 0])
 print(f"\nKruskal-Wallis: H = {stat_kw:.2f}, p = {p_kw:.4f}")
 
-# Mann-Whitney: "≤ 2 h" vs "Sin respuesta"
-a = df_merged[df_merged["categoria"] == "≤ 2 h"]["n_sesiones_pp"].values
+# Mann-Whitney: primera categoría vs "Sin respuesta"
+a = df_merged[df_merged["categoria"] == ORDEN[0]]["n_sesiones_pp"].values
 b = df_merged[df_merged["categoria"] == "Sin respuesta\nesa semana"][
     "n_sesiones_pp"
 ].values
 if len(a) > 0 and len(b) > 0:
     stat_mw, p_mw = mannwhitneyu(a, b, alternative="greater")
-    print(f"Mann-Whitney ≤2h vs Sin respuesta: p = {p_mw:.4f}")
+    print(f"Mann-Whitney {ORDEN[0]} vs Sin respuesta: p = {p_mw:.4f}")
 
 # Guardar CSV
 df_merged.to_csv(TABLES / "10f_latencia_respuesta.csv", index=False)
@@ -154,6 +163,10 @@ medias = [df_merged[df_merged["categoria"] == c]["n_sesiones_pp"].mean() for c i
 errores = [df_merged[df_merged["categoria"] == c]["n_sesiones_pp"].sem() for c in ORDEN]
 ns = [len(df_merged[df_merged["categoria"] == c]) for c in ORDEN]
 
+_xlabels = [
+    o.replace("\nesa semana", "\nesa\nsemana") if "\n" in o else o for o in ORDEN
+]
+
 bars = ax.bar(
     range(len(ORDEN)),
     medias,
@@ -166,10 +179,7 @@ bars = ax.bar(
 )
 
 ax.set_xticks(range(len(ORDEN)))
-ax.set_xticklabels(
-    ["≤ 2 h", "2–12 h", "12–48 h", "> 48 h", "Sin\nrespuesta"],
-    fontsize=10,
-)
+ax.set_xticklabels(_xlabels, fontsize=10)
 ax.set_ylabel("Media de sesiones de participación", fontsize=11, fontweight="bold")
 ax.set_xlabel(
     "Tiempo hasta primera respuesta de participantes\n(desde apertura del facilitador)",
@@ -215,7 +225,6 @@ pct_activas = [
     (df_merged[df_merged["categoria"] == c]["n_sesiones_pp"] > 0).mean() * 100
     for c in ORDEN
 ]
-ns2 = ns  # mismos N
 
 bars2 = ax2.bar(
     range(len(ORDEN)),
@@ -226,10 +235,7 @@ bars2 = ax2.bar(
 )
 
 ax2.set_xticks(range(len(ORDEN)))
-ax2.set_xticklabels(
-    ["≤ 2 h", "2–12 h", "12–48 h", "> 48 h", "Sin\nrespuesta"],
-    fontsize=10,
-)
+ax2.set_xticklabels(_xlabels, fontsize=10)
 ax2.set_ylabel(
     "% semanas con ≥1 sesión de participación", fontsize=11, fontweight="bold"
 )
@@ -284,10 +290,7 @@ bars_a = ax_a.bar(
     error_kw=dict(linewidth=1.5, ecolor="#444"),
 )
 ax_a.set_xticks(range(len(ORDEN)))
-ax_a.set_xticklabels(
-    ["≤ 2 h", "2–12 h", "12–48 h", "> 48 h", "Sin\nrespuesta"],
-    fontsize=10,
-)
+ax_a.set_xticklabels(_xlabels, fontsize=10)
 ax_a.set_ylabel("Media de sesiones de participación", fontsize=11, fontweight="bold")
 ax_a.set_xlabel(
     "Tiempo hasta primera respuesta de participantes\n(desde apertura del facilitador)",
@@ -340,10 +343,7 @@ bars_b = ax_b.bar(
     width=0.6,
 )
 ax_b.set_xticks(range(len(ORDEN)))
-ax_b.set_xticklabels(
-    ["≤ 2 h", "2–12 h", "12–48 h", "> 48 h", "Sin\nrespuesta"],
-    fontsize=10,
-)
+ax_b.set_xticklabels(_xlabels, fontsize=10)
 ax_b.set_ylabel(
     "% semanas con ≥1 sesión de participación", fontsize=11, fontweight="bold"
 )

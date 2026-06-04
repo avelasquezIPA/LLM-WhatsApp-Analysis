@@ -23,135 +23,40 @@ Output:
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pandas as pd
+from config_loader import PROJECT_ROOT, TABLES_DIR, cfg
 
 # ---------------------------------------------------------------------------
-# Configuración
+# Configuración (valores leídos de config.yaml)
 # ---------------------------------------------------------------------------
-ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = ROOT / "data" / "clean"
-TABLES_DIR = ROOT / "outputs" / "tables"
+PROJECT_NAME = cfg["project"]["name"]
+ADAPTATION_KEY = f"Adaptación {PROJECT_NAME}"
+
+COL_GROUP = cfg["data"]["columns"]["group_id"]
+COL_WEEK = cfg["data"]["columns"]["week_number"]
+COL_DATETIME = cfg["data"]["columns"]["datetime"]
+COL_SENDER = cfg["data"]["columns"]["sender"]
+COL_PARTICIPANT_ID = cfg["data"]["columns"]["participant_id"]
+COL_TYPE = cfg["data"]["columns"]["message_type"]
+COL_TEXT = cfg["data"]["columns"]["message_text"]
+COL_THEME = cfg["data"]["columns"]["theme"]
 
 # ---------------------------------------------------------------------------
-# Guía de indicadores (idéntica a 10b)
+# Guía de indicadores (construida desde config.yaml)
 # ---------------------------------------------------------------------------
 GUIA_INDICADORES = [
     {
-        "Nivel": "Stance-only",
-        "N": "I1",
-        "Indicador": "Emergencia de posturas",
-        "Definición (Dedios et al.)": (
-            "Un participante comparte su punto de vista, opinión o experiencia "
-            "sobre el tema sin que genere respuesta de otro participante."
-        ),
-        "Adaptación Apapachar": (
-            "Postura sobre una práctica de crianza, sobre corresponsabilidad "
-            "en el hogar, o sobre una experiencia familiar pasada o presente. "
-            "Ejemplo: 'En mi casa siempre le pegamos a los hijos cuando no obedecen.'"
-        ),
-        "Código en plantilla": "I1_stance",
-    },
-    {
-        "Nivel": "Interacción básica",
-        "N": "I2",
-        "Indicador": "Consenso",
-        "Definición (Dedios et al.)": (
-            "Dos o más participantes expresan acuerdo explícito con la postura "
-            "de otro participante."
-        ),
-        "Adaptación Apapachar": (
-            "Un participante valida o refuerza lo que dijo otro. Marcadores: "
-            "'yo también', 'exactamente', 'estoy de acuerdo', 'como dijo [nombre]', "
-            "'me pasa lo mismo'."
-        ),
-        "Código en plantilla": "I2_consenso",
-    },
-    {
-        "Nivel": "Interacción básica",
-        "N": "I3",
-        "Indicador": "Desacuerdo",
-        "Definición (Dedios et al.)": (
-            "Un participante desafía o contradice explícitamente la postura "
-            "de otro participante."
-        ),
-        "Adaptación Apapachar": (
-            "Un participante matiza o cuestiona lo que dijo otro. Puede ser "
-            "suave ('pero en mi caso...', 'no sé si estoy de acuerdo') o más "
-            "directo. Incluye tensión entre crianza tradicional y nueva."
-        ),
-        "Código en plantilla": "I3_desacuerdo",
-    },
-    {
-        "Nivel": "Interacción básica",
-        "N": "I4",
-        "Indicador": "Cambio de posición",
-        "Definición (Dedios et al.)": (
-            "Un participante modifica una postura que había expresado previamente "
-            "en la misma discusión."
-        ),
-        "Adaptación Apapachar": (
-            "Incluye también cuando un participante reporta que cambió una "
-            "práctica en casa como resultado de la discusión en el grupo. "
-            "Ejemplo: 'Antes le gritaba pero ahora que hablamos de esto lo "
-            "intento diferente.'"
-        ),
-        "Código en plantilla": "I4_cambio_posicion",
-    },
-    {
-        "Nivel": "Interacción compleja",
-        "N": "I5",
-        "Indicador": "Construcción descriptiva de normalidad",
-        "Definición (Dedios et al.)": (
-            "Los participantes negocian colectivamente qué comportamientos o "
-            "situaciones son 'normales' o 'típicas' en su contexto."
-        ),
-        "Adaptación Apapachar": (
-            "Participantes co-construyen qué es 'normal' en crianza. Ej: "
-            "'En Colombia siempre ha sido así', 'la mayoría de padres lo hace'."
-        ),
-        "Código en plantilla": "I5_normalidad",
-    },
-    {
-        "Nivel": "Interacción compleja",
-        "N": "I6",
-        "Indicador": "Construcción moral",
-        "Definición (Dedios et al.)": (
-            "Los participantes negocian juicios morales, evaluando "
-            "comportamientos como correctos/incorrectos, buenos/malos."
-        ),
-        "Adaptación Apapachar": (
-            "Evaluación moral de prácticas de crianza, corresponsabilidad, "
-            "o violencia intrafamiliar. Puede ser conflictivo o de consenso moral."
-        ),
-        "Código en plantilla": "I6_moral",
-    },
-    {
-        "Nivel": "Interacción compleja",
-        "N": "I7",
-        "Indicador": "Identidades compartidas",
-        "Definición (Dedios et al.)": (
-            "Los participantes co-construyen una identidad colectiva como grupo."
-        ),
-        "Adaptación Apapachar": (
-            "Uso del 'nosotros' inclusivo: 'nosotras como madres...', "
-            "'como papás entendemos...'. Diferente del 'nosotros' familiar."
-        ),
-        "Código en plantilla": "I7_identidad",
-    },
-    {
-        "Nivel": "Específico Apapachar",
-        "N": "I8",
-        "Indicador": "Adopción de práctica reportada",
-        "Definición (Dedios et al.)": "N/A — indicador nuevo propuesto para intervenciones",
-        "Adaptación Apapachar": (
-            "Un participante reporta explícitamente haber aplicado algo del "
-            "programa en casa durante la semana. Evidencia directa de transferencia."
-        ),
-        "Código en plantilla": "I8_adopcion_practica",
-    },
+        "Nivel": ind["level"],
+        "N": ind["id"],
+        "Indicador": ind["name"],
+        "Definición (Dedios et al.)": ind["definition_dedios"].strip(),
+        ADAPTATION_KEY: ind["adaptation"].strip(),
+        "Código en plantilla": ind["template_code"],
+    }
+    for ind in cfg["coding"]["indicators"]
 ]
+
+_indicator_codes = [ind["template_code"] for ind in cfg["coding"]["indicators"]]
 
 COLS_PLANTILLA = [
     "grupo",
@@ -164,14 +69,7 @@ COLS_PLANTILLA = [
     "n_mensajes",
     "ids_participantes",
     "resumen_tematica",
-    "I1_stance",
-    "I2_consenso",
-    "I3_desacuerdo",
-    "I4_cambio_posicion",
-    "I5_normalidad",
-    "I6_moral",
-    "I7_identidad",
-    "I8_adopcion_practica",
+    *_indicator_codes,
     "nivel_interaccion",
     "citas_relevantes",
     "notas",
@@ -681,26 +579,26 @@ CHUNKS: list[dict] = [
 
 def get_tema(df: pd.DataFrame, v_grupo: str, semana: int) -> str:
     """Obtiene el tema de una sesión desde el DataFrame de mensajes."""
-    sub = df[(df["v_grupo"] == v_grupo) & (df["n_week"] == semana)]
-    if "tema" in sub.columns and not sub.empty:
-        vals = sub["tema"].dropna()
+    sub = df[(df[COL_GROUP] == v_grupo) & (df[COL_WEEK] == semana)]
+    if COL_THEME in sub.columns and not sub.empty:
+        vals = sub[COL_THEME].dropna()
         return vals.iloc[0] if not vals.empty else ""
     return ""
 
 
 def cargar_mensajes(df: pd.DataFrame, v_grupo: str, semana: int) -> pd.DataFrame:
     """Extrae y formatea los mensajes de un grupo-semana."""
-    sub = df[(df["v_grupo"] == v_grupo) & (df["n_week"] == semana)].copy()
-    sub = sub.sort_values("datetime").reset_index(drop=True)
-    sub["hora"] = pd.to_datetime(sub["datetime"]).dt.strftime("%Y-%m-%d %H:%M")
-    cols = ["hora", "remitente", "id_f", "tipo", "texto"]
+    sub = df[(df[COL_GROUP] == v_grupo) & (df[COL_WEEK] == semana)].copy()
+    sub = sub.sort_values(COL_DATETIME).reset_index(drop=True)
+    sub["hora"] = pd.to_datetime(sub[COL_DATETIME]).dt.strftime("%Y-%m-%d %H:%M")
+    cols = ["hora", COL_SENDER, COL_PARTICIPANT_ID, COL_TYPE, COL_TEXT]
     return sub[cols].rename(
         columns={
             "hora": "Fecha/hora",
-            "remitente": "Remitente",
-            "id_f": "ID participante",
-            "tipo": "Tipo",
-            "texto": "Mensaje",
+            COL_SENDER: "Remitente",
+            COL_PARTICIPANT_ID: "ID participante",
+            COL_TYPE: "Tipo",
+            COL_TEXT: "Mensaje",
         }
     )
 
@@ -712,7 +610,7 @@ def marcar_sesiones_pp(
     semana: int,
 ) -> pd.DataFrame:
     """Añade columna indicando si el mensaje cae en una sesión P-P."""
-    subs = sesiones[(sesiones["v_grupo"] == v_grupo) & (sesiones["n_week"] == semana)][
+    subs = sesiones[(sesiones[COL_GROUP] == v_grupo) & (sesiones[COL_WEEK] == semana)][
         ["datetime_inicio", "datetime_fin", "sesion_id"]
     ].copy()
 
@@ -862,7 +760,7 @@ def write_sheet_guia(writer: pd.ExcelWriter) -> None:
             "N",
             "Indicador",
             "Definición (Dedios et al.)",
-            "Adaptación Apapachar",
+            ADAPTATION_KEY,
             "Código en plantilla",
         ]
     ]
@@ -886,7 +784,7 @@ def write_sheet_guia(writer: pd.ExcelWriter) -> None:
         "Interacción compleja": PatternFill(
             start_color="E2EFDA", end_color="E2EFDA", fill_type="solid"
         ),
-        "Específico Apapachar": PatternFill(
+        f"Específico {PROJECT_NAME}": PatternFill(
             start_color="FCE4D6", end_color="FCE4D6", fill_type="solid"
         ),
     }
@@ -912,7 +810,9 @@ def write_sheet_guia(writer: pd.ExcelWriter) -> None:
 # ---------------------------------------------------------------------------
 def main() -> None:
     print("Cargando datos...")
-    df = pd.read_parquet(DATA_DIR / "mensajes_preprocesados.parquet")
+    df = pd.read_parquet(
+        PROJECT_ROOT / cfg["data"]["intermediate"]["preprocessed_messages"]
+    )
     sesiones = pd.read_csv(TABLES_DIR / "10a_cadenas_sesion.csv")
 
     for chunk in CHUNKS:

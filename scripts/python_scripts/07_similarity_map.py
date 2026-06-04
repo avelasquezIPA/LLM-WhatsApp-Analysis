@@ -18,39 +18,39 @@ Output:
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import chromadb
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import umap
+from config_loader import DATA_DIR, FIGURES_DIR, TABLES_DIR, cfg
 from matplotlib.lines import Line2D
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import normalize
 
 # ---------------------------------------------------------------------------
-# Configuración
+# Configuración (valores leídos de config.yaml)
 # ---------------------------------------------------------------------------
-ROOT = Path(__file__).resolve().parents[2]
-VECTORSTORE_PATH = ROOT / "data" / "vectorstore"
-CHUNKS_PATH = ROOT / "data" / "clean" / "chunks.parquet"
-OUT_FIGURES = ROOT / "outputs" / "figures"
-OUT_TABLES = ROOT / "outputs" / "tables"
+VECTORSTORE_PATH = DATA_DIR / cfg["data"]["intermediate"]["vectorstore"]
+CHUNKS_PATH = DATA_DIR / "clean" / "chunks.parquet"
+OUT_FIGURES = FIGURES_DIR
+OUT_TABLES = TABLES_DIR
 
-CIUDADES_COLORES = {
-    "Bogota": "#1976D2",
-    "Soacha": "#388E3C",
-    "Neiva": "#F57C00",
-    "Valledupar": "#7B1FA2",
-}
+COLECCION_NOMBRE = cfg["vectordb"]["collection_chunks"]
+CIUDADES_COLORES = cfg["visualization"]["colors"]["cities"]
+PROJECT_NAME = cfg["project"]["name"]
+COL_CITY = cfg["data"]["columns"]["city_group"]
+COL_WEEK = cfg["data"]["columns"]["week_number"]
+RANDOM_SEED = cfg["analysis"]["clustering"]["random_seed"]
+UMAP_N_NEIGHBORS = cfg["analysis"]["umap"]["n_neighbors"]
+UMAP_MIN_DIST = cfg["analysis"]["umap"]["min_dist"]
 
 # ---------------------------------------------------------------------------
 # 1. Cargar embeddings
 # ---------------------------------------------------------------------------
 print("Cargando embeddings...")
 cliente = chromadb.PersistentClient(path=str(VECTORSTORE_PATH))
-coleccion = cliente.get_collection("apapachar_chunks")
+coleccion = cliente.get_collection(COLECCION_NOMBRE)
 resultado = coleccion.get(include=["embeddings", "metadatas"])
 
 embeddings = normalize(np.array(resultado["embeddings"]))
@@ -68,14 +68,12 @@ print("\nCalculando matriz de similitud...")
 sim_matrix = cosine_similarity(embeddings)
 
 # Ordenar por ciudad + semana para que el heatmap tenga sentido
-chunks_sorted = chunks.sort_values(["city_grupo", "n_week"]).reset_index(drop=True)
+chunks_sorted = chunks.sort_values([COL_CITY, COL_WEEK]).reset_index(drop=True)
 order_idx = [ids.index(c) for c in chunks_sorted["chunk_id"]]
 sim_ordered = sim_matrix[np.ix_(order_idx, order_idx)]
 
 # Etiquetas cortas para los ejes
-labels = [
-    f"{r['city_grupo'][:3]}_s{r['n_week']:02d}" for _, r in chunks_sorted.iterrows()
-]
+labels = [f"{r[COL_CITY][:3]}_s{r[COL_WEEK]:02d}" for _, r in chunks_sorted.iterrows()]
 
 # Guardar matriz
 sim_df = pd.DataFrame(sim_ordered, index=labels, columns=labels)
@@ -88,11 +86,10 @@ print("  Matriz guardada.")
 print("\nGenerando heatmap...")
 
 # Separadores entre ciudades
-ciudad_counts = chunks_sorted["city_grupo"].value_counts().sort_index()
 separadores = []
 acum = 0
-for ciudad in sorted(chunks_sorted["city_grupo"].unique()):
-    n = (chunks_sorted["city_grupo"] == ciudad).sum()
+for ciudad in sorted(chunks_sorted[COL_CITY].unique()):
+    n = (chunks_sorted[COL_CITY] == ciudad).sum()
     acum += n
     separadores.append(acum)
 
@@ -112,8 +109,8 @@ ax.set_yticklabels(labels, fontsize=7)
 
 # Etiquetas de ciudad en los ejes
 acum = 0
-for ciudad in sorted(chunks_sorted["city_grupo"].unique()):
-    n = (chunks_sorted["city_grupo"] == ciudad).sum()
+for ciudad in sorted(chunks_sorted[COL_CITY].unique()):
+    n = (chunks_sorted[COL_CITY] == ciudad).sum()
     mid = acum + n / 2 - 0.5
     ax.text(
         -1.5,
@@ -128,7 +125,7 @@ for ciudad in sorted(chunks_sorted["city_grupo"].unique()):
     acum += n
 
 ax.set_title(
-    "Mapa de similitud semántica entre chunks\nPrograma Apapachar (ciudad x semana)",
+    f"Mapa de similitud semántica entre chunks\n{PROJECT_NAME} (ciudad x semana)",
     fontsize=13,
     pad=15,
 )
@@ -143,10 +140,10 @@ print("  Heatmap guardado.")
 print("\nCalculando evolución semántica...")
 
 # Embedding promedio por semana (promedio entre ciudades)
-semanas = sorted(chunks["n_week"].unique())
+semanas = sorted(chunks[COL_WEEK].unique())
 emb_por_semana = []
 for s in semanas:
-    mask = chunks["n_week"] == s
+    mask = chunks[COL_WEEK] == s
     idx_semana = [ids.index(c) for c in chunks.loc[mask, "chunk_id"]]
     emb_promedio = embeddings[idx_semana].mean(axis=0)
     emb_promedio = emb_promedio / np.linalg.norm(emb_promedio)
@@ -155,23 +152,28 @@ for s in semanas:
 emb_por_semana = np.array(emb_por_semana)
 
 # Embedding por ciudad x semana para UMAP
-reductor = umap.UMAP(n_components=2, random_state=42, n_neighbors=8, min_dist=0.2)
+reductor = umap.UMAP(
+    n_components=cfg["analysis"]["umap"]["n_components"],
+    random_state=RANDOM_SEED,
+    n_neighbors=UMAP_N_NEIGHBORS,
+    min_dist=UMAP_MIN_DIST,
+)
 # Reducir todos los embeddings juntos para consistencia
 todos = np.vstack([embeddings, emb_por_semana])
 coords_todos = reductor.fit_transform(todos)
 coords_chunks = coords_todos[: len(embeddings)]
-coords_semanas = coords_todos[len(embeddings) :]
+coords_semanas = coords_todos[len(embeddings) :]  # noqa: F841
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 7))
-fig.suptitle("Evolución semántica del programa - Apapachar", fontsize=13)
+fig.suptitle(f"Evolución semántica del programa - {PROJECT_NAME}", fontsize=13)
 
 # Panel izq: trayectoria por ciudad
 ax = axes[0]
 for ciudad, color in CIUDADES_COLORES.items():
-    mask = chunks["city_grupo"] == ciudad
+    mask = chunks[COL_CITY] == ciudad
     idx_ciudad = [ids.index(c) for c in chunks.loc[mask, "chunk_id"]]
     coords_c = coords_chunks[idx_ciudad]
-    semanas_c = chunks.loc[mask, "n_week"].values
+    semanas_c = chunks.loc[mask, COL_WEEK].values
 
     order = np.argsort(semanas_c)
     x, y = coords_c[order, 0], coords_c[order, 1]
@@ -281,12 +283,8 @@ for c1 in sorted(CIUDADES_COLORES):
     for c2 in sorted(CIUDADES_COLORES):
         if c1 >= c2:
             continue
-        idx1 = [
-            ids.index(c) for c in chunks.loc[chunks["city_grupo"] == c1, "chunk_id"]
-        ]
-        idx2 = [
-            ids.index(c) for c in chunks.loc[chunks["city_grupo"] == c2, "chunk_id"]
-        ]
+        idx1 = [ids.index(c) for c in chunks.loc[chunks[COL_CITY] == c1, "chunk_id"]]
+        idx2 = [ids.index(c) for c in chunks.loc[chunks[COL_CITY] == c2, "chunk_id"]]
         sim = sim_matrix[np.ix_(idx1, idx2)].mean()
         print(f"  {c1:12s} vs {c2:12s}: {sim:.3f}")
 

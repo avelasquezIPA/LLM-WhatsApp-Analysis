@@ -31,22 +31,37 @@ Output:
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import pandas as pd
+from config_loader import FIGURES_DIR, PROJECT_ROOT, TABLES_DIR, cfg
 
 # ---------------------------------------------------------------------------
-# Configuración
+# Configuración (valores leídos de config.yaml)
 # ---------------------------------------------------------------------------
-ROOT = Path(__file__).resolve().parents[2]
-MENSAJES_PATH = ROOT / "data" / "clean" / "mensajes_preprocesados.parquet"
-OUT_TABLES = ROOT / "outputs" / "tables"
-OUT_FIGURES = ROOT / "outputs" / "figures"
+MENSAJES_PATH = PROJECT_ROOT / cfg["data"]["intermediate"]["preprocessed_messages"]
+OUT_TABLES = TABLES_DIR
+OUT_FIGURES = FIGURES_DIR
 
-UMBRAL_MINUTOS = 60  # gap máximo entre mensajes para considerarlos en la misma sesión
-MIN_PARTICIPANTES_PP = 2  # mínimo de participantes distintos para declarar cadena P-P
+UMBRAL_MINUTOS = cfg["analysis"]["interaction"]["session_gap_minutes"]
+MIN_PARTICIPANTES = cfg["analysis"]["interaction"]["min_participants_per_session"]
+
+COL_TYPE = cfg["data"]["columns"]["message_type"]
+COL_SENDER = cfg["data"]["columns"]["sender"]
+COL_GROUP = cfg["data"]["columns"]["group_id"]
+COL_WEEK = cfg["data"]["columns"]["week_number"]
+COL_DATETIME = cfg["data"]["columns"]["datetime"]
+COL_CITY = cfg["data"]["columns"]["city_group"]
+COL_THEME = cfg["data"]["columns"]["theme"]
+COL_TEXT = cfg["data"]["columns"]["message_text"]
+COL_PARTICIPANT_ID = cfg["data"]["columns"]["participant_id"]
+TEXT_TYPE = cfg["data"]["values"]["text_message_type"]
+PARTICIPANT = cfg["data"]["values"]["participant_sender"]
+FACILITATOR = cfg["data"]["values"]["facilitator_sender"]
+
+CIUDADES_COLORES = cfg["visualization"]["colors"]["cities"]
+CITIES = cfg["project"]["cities"]
 
 # Marcadores lingüísticos de respuesta explícita entre participantes
 PATRONES_RESPUESTA = [
@@ -74,19 +89,19 @@ RE_RESPUESTA = re.compile("|".join(PATRONES_RESPUESTA), re.IGNORECASE)
 # ---------------------------------------------------------------------------
 print("Cargando datos...")
 df = pd.read_parquet(MENSAJES_PATH)
-txt = df[df["tipo"] == "Mensaje en Texto"].copy()
-txt = txt.sort_values(["v_grupo", "n_week", "datetime"]).reset_index(drop=True)
+txt = df[df[COL_TYPE] == TEXT_TYPE].copy()
+txt = txt.sort_values([COL_GROUP, COL_WEEK, COL_DATETIME]).reset_index(drop=True)
 
-# Extraer género del grupo desde el nombre v_grupo (GH = hombres, GM = mujeres)
-txt["genero_grupo"] = txt["v_grupo"].str[:2].map({"GH": "Hombres", "GM": "Mujeres"})
+# Extraer género del grupo desde el nombre del grupo (GH = hombres, GM = mujeres)
+txt["genero_grupo"] = txt[COL_GROUP].str[:2].map({"GH": "Hombres", "GM": "Mujeres"})
 
-grupos_activos = txt["v_grupo"].unique()
+grupos_activos = txt[COL_GROUP].unique()
 print(f"  Mensajes de texto: {len(txt)}")
 print(f"  Grupos activos: {len(grupos_activos)}")
 print(
-    f"  Participantes únicos: {txt[txt['remitente'] == 'Participante']['id_f'].nunique()}"
+    f"  Participantes únicos: {txt[txt[COL_SENDER] == PARTICIPANT][COL_PARTICIPANT_ID].nunique()}"
 )
-print(f"  Semanas: {txt['n_week'].min()} - {txt['n_week'].max()}")
+print(f"  Semanas: {txt[COL_WEEK].min()} - {txt[COL_WEEK].max()}")
 
 # ---------------------------------------------------------------------------
 # 2. Detectar sesiones de actividad (gap < UMBRAL entre mensajes consecutivos)
@@ -96,36 +111,35 @@ print(f"\nDetectando sesiones (umbral gap: {UMBRAL_MINUTOS} min)...")
 registros_sesion = []
 registros_estricta = []
 
-for (v_grupo, n_week), grupo in txt.groupby(["v_grupo", "n_week"], observed=True):
-    grupo = grupo.sort_values("datetime").reset_index(drop=True)
+for (v_grupo, n_week), grupo in txt.groupby([COL_GROUP, COL_WEEK], observed=True):
+    grupo = grupo.sort_values(COL_DATETIME).reset_index(drop=True)
     if len(grupo) == 0:
         continue
 
-    ciudad = grupo["city_grupo"].iloc[0]
+    ciudad = grupo[COL_CITY].iloc[0]
     genero_grupo = grupo["genero_grupo"].iloc[0]
-    tema = grupo["tema"].iloc[0] if "tema" in grupo.columns else ""
+    tema = grupo[COL_THEME].iloc[0] if COL_THEME in grupo.columns else ""
 
     # --- 2a. Sesiones por ventana temporal ---
-    # Calcular gaps entre mensajes consecutivos (cualquier remitente)
-    grupo["gap_min"] = grupo["datetime"].diff().dt.total_seconds().div(60).fillna(0)
+    grupo["gap_min"] = grupo[COL_DATETIME].diff().dt.total_seconds().div(60).fillna(0)
     grupo["sesion_id"] = (grupo["gap_min"] > UMBRAL_MINUTOS).cumsum()
 
     for sesion_id, sesion in grupo.groupby("sesion_id"):
-        participantes_sesion = sesion[sesion["remitente"] == "Participante"]
-        ids_distintos = participantes_sesion["id_f"].nunique()
+        participantes_sesion = sesion[sesion[COL_SENDER] == PARTICIPANT]
+        ids_distintos = participantes_sesion[COL_PARTICIPANT_ID].nunique()
 
-        if ids_distintos < MIN_PARTICIPANTES_PP:
+        if ids_distintos < MIN_PARTICIPANTES:
             continue
 
         n_msgs_total = len(sesion)
         n_msgs_p = len(participantes_sesion)
         duracion = (
-            sesion["datetime"].max() - sesion["datetime"].min()
+            sesion[COL_DATETIME].max() - sesion[COL_DATETIME].min()
         ).total_seconds() / 60
 
         # Revisar marcadores lingüísticos en mensajes de participantes
         tiene_marcador = (
-            participantes_sesion["texto"]
+            participantes_sesion[COL_TEXT]
             .apply(lambda t: bool(RE_RESPUESTA.search(str(t))))
             .any()
         )
@@ -138,8 +152,8 @@ for (v_grupo, n_week), grupo in txt.groupby(["v_grupo", "n_week"], observed=True
                 "n_week": n_week,
                 "tema": str(tema),
                 "sesion_id": int(sesion_id),
-                "datetime_inicio": sesion["datetime"].min(),
-                "datetime_fin": sesion["datetime"].max(),
+                "datetime_inicio": sesion[COL_DATETIME].min(),
+                "datetime_fin": sesion[COL_DATETIME].max(),
                 "duracion_min": round(duracion, 1),
                 "n_msgs_total": n_msgs_total,
                 "n_msgs_participantes": n_msgs_p,
@@ -152,18 +166,18 @@ for (v_grupo, n_week), grupo in txt.groupby(["v_grupo", "n_week"], observed=True
     # --- 2b. Cadenas estrictas (sin facilitador en medio) ---
     cadena_actual = []
     for _, row in grupo.iterrows():
-        if row["remitente"] == "Facilitador":
-            # Cerrar cadena actual si tiene ≥2 participantes distintos
-            ids_en_cadena = {m["id_f"] for m in cadena_actual}
-            if len(ids_en_cadena) >= MIN_PARTICIPANTES_PP:
+        if row[COL_SENDER] == FACILITATOR:
+            # Cerrar cadena actual si tiene ≥ MIN_PARTICIPANTES distintos
+            ids_en_cadena = {m[COL_PARTICIPANT_ID] for m in cadena_actual}
+            if len(ids_en_cadena) >= MIN_PARTICIPANTES:
                 msgs_df = pd.DataFrame(cadena_actual)
                 tiene_marcador = (
-                    msgs_df["texto"]
+                    msgs_df[COL_TEXT]
                     .apply(lambda t: bool(RE_RESPUESTA.search(str(t))))
                     .any()
                 )
                 duracion = (
-                    msgs_df["datetime"].max() - msgs_df["datetime"].min()
+                    msgs_df[COL_DATETIME].max() - msgs_df[COL_DATETIME].min()
                 ).total_seconds() / 60
                 registros_estricta.append(
                     {
@@ -172,8 +186,8 @@ for (v_grupo, n_week), grupo in txt.groupby(["v_grupo", "n_week"], observed=True
                         "genero_grupo": genero_grupo,
                         "n_week": n_week,
                         "tema": str(tema),
-                        "datetime_inicio": msgs_df["datetime"].min(),
-                        "datetime_fin": msgs_df["datetime"].max(),
+                        "datetime_inicio": msgs_df[COL_DATETIME].min(),
+                        "datetime_fin": msgs_df[COL_DATETIME].max(),
                         "duracion_min": round(duracion, 1),
                         "n_msgs": len(msgs_df),
                         "n_participantes_distintos": len(ids_en_cadena),
@@ -186,14 +200,14 @@ for (v_grupo, n_week), grupo in txt.groupby(["v_grupo", "n_week"], observed=True
             cadena_actual.append(row.to_dict())
 
     # Procesar cadena final si quedó abierta
-    ids_en_cadena = {m["id_f"] for m in cadena_actual}
-    if len(ids_en_cadena) >= MIN_PARTICIPANTES_PP:
+    ids_en_cadena = {m[COL_PARTICIPANT_ID] for m in cadena_actual}
+    if len(ids_en_cadena) >= MIN_PARTICIPANTES:
         msgs_df = pd.DataFrame(cadena_actual)
         tiene_marcador = (
-            msgs_df["texto"].apply(lambda t: bool(RE_RESPUESTA.search(str(t)))).any()
+            msgs_df[COL_TEXT].apply(lambda t: bool(RE_RESPUESTA.search(str(t)))).any()
         )
         duracion = (
-            msgs_df["datetime"].max() - msgs_df["datetime"].min()
+            msgs_df[COL_DATETIME].max() - msgs_df[COL_DATETIME].min()
         ).total_seconds() / 60
         registros_estricta.append(
             {
@@ -202,8 +216,8 @@ for (v_grupo, n_week), grupo in txt.groupby(["v_grupo", "n_week"], observed=True
                 "genero_grupo": genero_grupo,
                 "n_week": n_week,
                 "tema": str(tema),
-                "datetime_inicio": msgs_df["datetime"].min(),
-                "datetime_fin": msgs_df["datetime"].max(),
+                "datetime_inicio": msgs_df[COL_DATETIME].min(),
+                "datetime_fin": msgs_df[COL_DATETIME].max(),
                 "duracion_min": round(duracion, 1),
                 "n_msgs": len(msgs_df),
                 "n_participantes_distintos": len(ids_en_cadena),
@@ -225,21 +239,22 @@ print("\nGenerando resumen por grupo-semana...")
 
 # Base: todos los v_grupo x n_week con mensajes
 base = (
-    txt.groupby(["v_grupo", "n_week"], observed=True)
+    txt.groupby([COL_GROUP, COL_WEEK], observed=True)
     .agg(
-        city_grupo=("city_grupo", "first"),
+        city_grupo=(COL_CITY, "first"),
         genero_grupo=("genero_grupo", "first"),
-        tema=("tema", "first"),
-        n_msgs_total=("texto", "count"),
-        n_msgs_facilitador=("remitente", lambda x: (x == "Facilitador").sum()),
-        n_msgs_participante=("remitente", lambda x: (x == "Participante").sum()),
+        tema=(COL_THEME, "first"),
+        n_msgs_total=(COL_TEXT, "count"),
+        n_msgs_facilitador=(COL_SENDER, lambda x: (x == FACILITATOR).sum()),
+        n_msgs_participante=(COL_SENDER, lambda x: (x == PARTICIPANT).sum()),
         n_participantes_distintos=(
-            "id_f",
-            lambda x: x[txt.loc[x.index, "remitente"] == "Participante"].nunique(),
+            COL_PARTICIPANT_ID,
+            lambda x: x[txt.loc[x.index, COL_SENDER] == PARTICIPANT].nunique(),
         ),
     )
     .reset_index()
 )
+base.rename(columns={COL_GROUP: "v_grupo", COL_WEEK: "n_week"}, inplace=True)
 base["pct_msgs_participante"] = (
     base["n_msgs_participante"] / base["n_msgs_total"] * 100
 ).round(1)
@@ -401,12 +416,7 @@ fig.suptitle(
     y=1.01,
 )
 
-COLORES_CIUDAD = {
-    "Bogota": "#1565C0",
-    "Soacha": "#2E7D32",
-    "Neiva": "#E65100",
-    "Valledupar": "#6A1B9A",
-}
+COLORES_CIUDAD = CIUDADES_COLORES
 
 # Panel 1: Sesiones P-P por semana (línea)
 ax = axes[0, 0]
@@ -414,7 +424,7 @@ if len(df_sesiones) > 0:
     por_semana = (
         df_sesiones.groupby(["n_week", "city_grupo"]).size().unstack(fill_value=0)
     )
-    for ciudad in ["Bogota", "Soacha", "Neiva", "Valledupar"]:
+    for ciudad in CITIES:
         if ciudad in por_semana.columns:
             ax.plot(
                 por_semana.index,
@@ -469,9 +479,7 @@ ax = axes[1, 1]
 if len(df_sesiones) > 0:
     # Total mensajes P por ciudad
     total_p_ciudad = (
-        txt[txt["remitente"] == "Participante"]
-        .groupby("city_grupo", observed=True)
-        .size()
+        txt[txt[COL_SENDER] == PARTICIPANT].groupby(COL_CITY, observed=True).size()
     )
     # Mensajes P que cayeron en sesiones P-P
     pp_p_ciudad = df_sesiones.groupby("city_grupo")["n_msgs_participantes"].sum()

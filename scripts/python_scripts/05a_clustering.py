@@ -15,32 +15,40 @@ Output:
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import chromadb
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import umap
+from config_loader import DATA_DIR, FIGURES_DIR, TABLES_DIR, cfg
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import normalize
 
 # ---------------------------------------------------------------------------
-# Configuración
+# Configuración (valores leídos de config.yaml)
 # ---------------------------------------------------------------------------
-ROOT = Path(__file__).resolve().parents[2]
-VECTORSTORE_PATH = ROOT / "data" / "vectorstore"
-CHUNKS_PATH = ROOT / "data" / "clean" / "chunks.parquet"
-OUT_FIGURES = ROOT / "outputs" / "figures"
-OUT_TABLES = ROOT / "outputs" / "tables"
+VECTORSTORE_PATH = DATA_DIR / cfg["data"]["intermediate"]["vectorstore"]
+CHUNKS_PATH = DATA_DIR / "clean" / "chunks.parquet"
+OUT_FIGURES = FIGURES_DIR
+OUT_TABLES = TABLES_DIR
+
+COLECCION_NOMBRE = cfg["vectordb"]["collection_chunks"]
+KMEANS_RANGE = range(
+    cfg["analysis"]["clustering"]["kmeans_range"][0],
+    cfg["analysis"]["clustering"]["kmeans_range"][1] + 1,
+)
+KMEANS_N_INIT = cfg["analysis"]["clustering"]["kmeans_n_init"]
+RANDOM_SEED = cfg["analysis"]["clustering"]["random_seed"]
+UMAP_N_NEIGHBORS = cfg["analysis"]["umap"]["n_neighbors"]
+UMAP_MIN_DIST = cfg["analysis"]["umap"]["min_dist"]
 
 # ---------------------------------------------------------------------------
 # 1. Cargar embeddings desde ChromaDB
 # ---------------------------------------------------------------------------
 print("Cargando embeddings desde ChromaDB...")
 cliente = chromadb.PersistentClient(path=str(VECTORSTORE_PATH))
-coleccion = cliente.get_collection("apapachar_chunks")
+coleccion = cliente.get_collection(COLECCION_NOMBRE)
 
 resultado = coleccion.get(include=["embeddings", "metadatas"])
 embeddings = np.array(resultado["embeddings"])
@@ -59,13 +67,15 @@ chunks = chunks.set_index("chunk_id").loc[ids].reset_index()
 # ---------------------------------------------------------------------------
 # 2. Método del codo + silhouette para elegir k
 # ---------------------------------------------------------------------------
-print("\nCalculando método del codo y silhouette (k=2 a 10)...")
-rango_k = range(2, 11)
+print(
+    f"\nCalculando método del codo y silhouette (k={KMEANS_RANGE.start} a {KMEANS_RANGE.stop - 1})..."
+)
+rango_k = KMEANS_RANGE
 inercias = []
 silhouettes = []
 
 for k in rango_k:
-    km = KMeans(n_clusters=k, random_state=42, n_init=10)
+    km = KMeans(n_clusters=k, random_state=RANDOM_SEED, n_init=KMEANS_N_INIT)
     etiquetas = km.fit_predict(embeddings_norm)
     inercias.append(km.inertia_)
     silhouettes.append(silhouette_score(embeddings_norm, etiquetas))
@@ -105,7 +115,7 @@ print("  Figura del codo guardada.")
 # 3. KMeans con k óptimo
 # ---------------------------------------------------------------------------
 print(f"\nAplicando KMeans con k={k_optimo}...")
-kmeans = KMeans(n_clusters=k_optimo, random_state=42, n_init=10)
+kmeans = KMeans(n_clusters=k_optimo, random_state=RANDOM_SEED, n_init=KMEANS_N_INIT)
 chunks["cluster"] = kmeans.fit_predict(embeddings_norm)
 
 print("\n=== Distribución de chunks por cluster ===")
@@ -118,7 +128,12 @@ for c in sorted(chunks["cluster"].unique()):
 # 4. UMAP: reducir a 2D para visualizar
 # ---------------------------------------------------------------------------
 print("\nReduciendo a 2D con UMAP...")
-reductor = umap.UMAP(n_components=2, random_state=42, n_neighbors=10, min_dist=0.3)
+reductor = umap.UMAP(
+    n_components=cfg["analysis"]["umap"]["n_components"],
+    random_state=RANDOM_SEED,
+    n_neighbors=UMAP_N_NEIGHBORS,
+    min_dist=UMAP_MIN_DIST,
+)
 coords_2d = reductor.fit_transform(embeddings_norm)
 
 chunks["umap_x"] = coords_2d[:, 0]

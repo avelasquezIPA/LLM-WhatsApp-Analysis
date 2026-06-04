@@ -22,39 +22,43 @@ Output:
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import umap
+from config_loader import FIGURES_DIR, PROJECT_ROOT, TABLES_DIR, cfg
 from matplotlib.lines import Line2D
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import normalize
 
 # ---------------------------------------------------------------------------
-# Configuración
+# Configuración (valores leídos de config.yaml)
 # ---------------------------------------------------------------------------
-ROOT = Path(__file__).resolve().parents[2]
-MENSAJES_PATH = ROOT / "data" / "clean" / "mensajes_preprocesados.parquet"
-OUT_FIGURES = ROOT / "outputs" / "figures"
-OUT_TABLES = ROOT / "outputs" / "tables"
-MODELO_NOMBRE = "paraphrase-multilingual-mpnet-base-v2"
+MENSAJES_PATH = PROJECT_ROOT / cfg["data"]["intermediate"]["preprocessed_messages"]
+OUT_FIGURES = FIGURES_DIR
+OUT_TABLES = TABLES_DIR
+MODELO_NOMBRE = cfg["models"]["embedding_model"]
 
-CIUDADES_COLORES = {
-    "Bogota": "#1976D2",
-    "Soacha": "#388E3C",
-    "Neiva": "#F57C00",
-    "Valledupar": "#7B1FA2",
-}
+CIUDADES_COLORES = cfg["visualization"]["colors"]["cities"]
+PROJECT_NAME = cfg["project"]["name"]
+COL_CITY = cfg["data"]["columns"]["city_group"]
+COL_WEEK = cfg["data"]["columns"]["week_number"]
+COL_DATETIME = cfg["data"]["columns"]["datetime"]
+COL_SENDER = cfg["data"]["columns"]["sender"]
+COL_TEXT = cfg["data"]["columns"]["message_text"]
+COL_THEME = cfg["data"]["columns"]["theme"]
+PARTICIPANT = cfg["data"]["values"]["participant_sender"]
+RANDOM_SEED = cfg["analysis"]["clustering"]["random_seed"]
+UMAP_N_NEIGHBORS = cfg["analysis"]["umap"]["n_neighbors"]
+UMAP_MIN_DIST = cfg["analysis"]["umap"]["min_dist"]
 
 # ---------------------------------------------------------------------------
 # 1. Cargar y filtrar: solo participantes
 # ---------------------------------------------------------------------------
 print("Cargando mensajes...")
 df = pd.read_parquet(MENSAJES_PATH)
-df_part = df[df["remitente"] == "Participante"].copy()
+df_part = df[df[COL_SENDER] == PARTICIPANT].copy()
 print(f"  Total mensajes en dataset: {len(df)}")
 print(f"  Mensajes de participantes: {len(df_part)}")
 print(f"  Mensajes de facilitadores excluidos: {len(df) - len(df_part)}")
@@ -64,17 +68,17 @@ print(f"  Mensajes de facilitadores excluidos: {len(df) - len(df_part)}")
 # ---------------------------------------------------------------------------
 print("\nConstruyendo chunks de participantes (ciudad x semana)...")
 registros = []
-for (ciudad, semana), grupo in df_part.groupby(["city_grupo", "n_week"], observed=True):
-    grupo = grupo.sort_values("datetime").reset_index(drop=True)
-    lineas = [f"[{i + 1}] {row['texto']}" for i, row in grupo.iterrows()]
+for (ciudad, semana), grupo in df_part.groupby([COL_CITY, COL_WEEK], observed=True):
+    grupo = grupo.sort_values(COL_DATETIME).reset_index(drop=True)
+    lineas = [f"[{i + 1}] {row[COL_TEXT]}" for i, row in grupo.iterrows()]
     texto_chunk = "\n".join(lineas)
-    tema = grupo["tema"].iloc[0] if "tema" in grupo.columns else ""
+    tema = grupo[COL_THEME].iloc[0] if COL_THEME in grupo.columns else ""
     registros.append(
         {
             "chunk_id": f"{ciudad}_s{semana:02d}",
-            "city_grupo": ciudad,
-            "n_week": semana,
-            "tema": tema,
+            COL_CITY: ciudad,
+            COL_WEEK: semana,
+            COL_THEME: tema,
             "n_mensajes": len(grupo),
             "texto_chunk": texto_chunk,
         }
@@ -110,13 +114,11 @@ print(f"  {len(ids)} embeddings generados ({embeddings.shape[1]} dimensiones).")
 print("\nCalculando matriz de similitud...")
 sim_matrix = cosine_similarity(embeddings)
 
-chunks_sorted = chunks.sort_values(["city_grupo", "n_week"]).reset_index(drop=True)
+chunks_sorted = chunks.sort_values([COL_CITY, COL_WEEK]).reset_index(drop=True)
 order_idx = [ids.index(c) for c in chunks_sorted["chunk_id"]]
 sim_ordered = sim_matrix[np.ix_(order_idx, order_idx)]
 
-labels = [
-    f"{r['city_grupo'][:3]}_s{r['n_week']:02d}" for _, r in chunks_sorted.iterrows()
-]
+labels = [f"{r[COL_CITY][:3]}_s{r[COL_WEEK]:02d}" for _, r in chunks_sorted.iterrows()]
 
 sim_df = pd.DataFrame(sim_ordered, index=labels, columns=labels)
 sim_df.to_csv(OUT_TABLES / "07b_similarity_matrix_participantes.csv")
@@ -129,8 +131,8 @@ print("\nGenerando heatmap...")
 
 separadores = []
 acum = 0
-for ciudad in sorted(chunks_sorted["city_grupo"].unique()):
-    n = (chunks_sorted["city_grupo"] == ciudad).sum()
+for ciudad in sorted(chunks_sorted[COL_CITY].unique()):
+    n = (chunks_sorted[COL_CITY] == ciudad).sum()
     acum += n
     separadores.append(acum)
 
@@ -148,8 +150,8 @@ ax.set_xticklabels(labels, rotation=90, fontsize=7)
 ax.set_yticklabels(labels, fontsize=7)
 
 acum = 0
-for ciudad in sorted(chunks_sorted["city_grupo"].unique()):
-    n = (chunks_sorted["city_grupo"] == ciudad).sum()
+for ciudad in sorted(chunks_sorted[COL_CITY].unique()):
+    n = (chunks_sorted[COL_CITY] == ciudad).sum()
     mid = acum + n / 2 - 0.5
     ax.text(
         -1.5,
@@ -164,8 +166,8 @@ for ciudad in sorted(chunks_sorted["city_grupo"].unique()):
     acum += n
 
 ax.set_title(
-    "Mapa de similitud semántica entre chunks - Solo participantes\n"
-    "Programa Apapachar (ciudad x semana)",
+    f"Mapa de similitud semántica entre chunks - Solo participantes\n"
+    f"{PROJECT_NAME} (ciudad x semana)",
     fontsize=13,
     pad=15,
 )
@@ -179,10 +181,10 @@ print("  Heatmap guardado.")
 # ---------------------------------------------------------------------------
 print("\nCalculando evolución semántica...")
 
-semanas = sorted(chunks["n_week"].unique())
+semanas = sorted(chunks[COL_WEEK].unique())
 emb_por_semana = []
 for s in semanas:
-    mask = chunks["n_week"] == s
+    mask = chunks[COL_WEEK] == s
     idx_semana = [ids.index(c) for c in chunks.loc[mask, "chunk_id"]]
     emb_promedio = embeddings[idx_semana].mean(axis=0)
     emb_promedio = emb_promedio / np.linalg.norm(emb_promedio)
@@ -190,23 +192,28 @@ for s in semanas:
 
 emb_por_semana = np.array(emb_por_semana)
 
-reductor = umap.UMAP(n_components=2, random_state=42, n_neighbors=8, min_dist=0.2)
+reductor = umap.UMAP(
+    n_components=cfg["analysis"]["umap"]["n_components"],
+    random_state=RANDOM_SEED,
+    n_neighbors=UMAP_N_NEIGHBORS,
+    min_dist=UMAP_MIN_DIST,
+)
 todos = np.vstack([embeddings, emb_por_semana])
 coords_todos = reductor.fit_transform(todos)
 coords_chunks = coords_todos[: len(embeddings)]
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 7))
 fig.suptitle(
-    "Evolución semántica del programa - Solo participantes - Apapachar",
+    f"Evolución semántica del programa - Solo participantes - {PROJECT_NAME}",
     fontsize=13,
 )
 
 ax = axes[0]
 for ciudad, color in CIUDADES_COLORES.items():
-    mask = chunks["city_grupo"] == ciudad
+    mask = chunks[COL_CITY] == ciudad
     idx_ciudad = [ids.index(c) for c in chunks.loc[mask, "chunk_id"]]
     coords_c = coords_chunks[idx_ciudad]
-    semanas_c = chunks.loc[mask, "n_week"].values
+    semanas_c = chunks.loc[mask, COL_WEEK].values
 
     order = np.argsort(semanas_c)
     x, y = coords_c[order, 0], coords_c[order, 1]
@@ -313,12 +320,8 @@ for c1 in sorted(CIUDADES_COLORES):
     for c2 in sorted(CIUDADES_COLORES):
         if c1 >= c2:
             continue
-        idx1 = [
-            ids.index(c) for c in chunks.loc[chunks["city_grupo"] == c1, "chunk_id"]
-        ]
-        idx2 = [
-            ids.index(c) for c in chunks.loc[chunks["city_grupo"] == c2, "chunk_id"]
-        ]
+        idx1 = [ids.index(c) for c in chunks.loc[chunks[COL_CITY] == c1, "chunk_id"]]
+        idx2 = [ids.index(c) for c in chunks.loc[chunks[COL_CITY] == c2, "chunk_id"]]
         sim = sim_matrix[np.ix_(idx1, idx2)].mean()
         print(f"  {c1:12s} vs {c2:12s}: {sim:.3f}")
 

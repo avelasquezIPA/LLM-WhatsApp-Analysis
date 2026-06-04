@@ -27,38 +27,44 @@ Uso:
 
 import sys
 import unicodedata
-from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from config_loader import FIGURES_DIR, PROJECT_ROOT, TABLES_DIR, cfg
 from scipy.stats import pearsonr, spearmanr
 
 # ── Rutas ─────────────────────────────────────────────────────────────────────
-ROOT = Path(__file__).resolve().parents[2]
-DATA = ROOT / "data" / "clean" / "mensajes_preprocesados.parquet"
-TABLES_IN = ROOT / "outputs" / "tables"
-TABLES_OUT = ROOT / "outputs" / "tables"
-FIGURES_OUT = ROOT / "outputs" / "figures"
+DATA = PROJECT_ROOT / cfg["data"]["intermediate"]["preprocessed_messages"]
+TABLES_IN = TABLES_DIR
+TABLES_OUT = TABLES_DIR
+FIGURES_OUT = FIGURES_DIR
 
-COLORS_GEN = {"Mujer": "#c0392b", "Hombre": "#2e86c1"}
-COLORS_CITY = {
-    "Bogota": "#1a5276",
-    "Neiva": "#117a65",
-    "Soacha": "#784212",
-    "Valledupar": "#6c3483",
-}
+COL_TYPE = cfg["data"]["columns"]["message_type"]
+COL_SENDER = cfg["data"]["columns"]["sender"]
+COL_GROUP = cfg["data"]["columns"]["group_id"]
+COL_WEEK = cfg["data"]["columns"]["week_number"]
+COL_CITY = cfg["data"]["columns"]["city_group"]
+COL_PARTICIPANT_ID = cfg["data"]["columns"]["participant_id"]
+COL_GENDER_GROUP = cfg["data"]["columns"]["gender_group"]
+TEXT_TYPE = cfg["data"]["values"]["text_message_type"]
+PARTICIPANT = cfg["data"]["values"]["participant_sender"]
+FACILITATOR = cfg["data"]["values"]["facilitator_sender"]
+
+COLORS_GEN = cfg["visualization"]["colors"]["gender"]
+COLORS_CITY = cfg["visualization"]["colors"]["cities"]
+DPI = cfg["visualization"]["dpi"]
+
+SEMANAS = list(range(1, cfg["project"]["duration_weeks"] + 1))
 
 plt.rcParams.update(
     {
-        "figure.dpi": 150,
+        "figure.dpi": DPI,
         "axes.spines.top": False,
         "axes.spines.right": False,
         "font.size": 10,
     }
 )
-
-SEMANAS = list(range(1, 13))
 
 
 def normalize_city(s):
@@ -73,10 +79,10 @@ def normalize_city(s):
 
 print("Cargando datos...")
 df_raw = pd.read_parquet(DATA)
-txt = df_raw[df_raw["tipo"] == "Mensaje en Texto"].copy()
+txt = df_raw[df_raw[COL_TYPE] == TEXT_TYPE].copy()
 
 # Separar facilitadores y participantes
-is_fac = txt["remitente"].str.contains("Facilitador|Coordinadora", na=False)
+is_fac = txt[COL_SENDER].str.contains("Facilitador|Coordinadora", na=False)
 participantes = txt[~is_fac].copy()
 facilitadores = txt[is_fac].copy()
 
@@ -96,8 +102,8 @@ print(
     f"  Mensajes texto: {len(txt):,} | Participantes: {len(participantes):,} | "
     f"Facilitadores: {len(facilitadores):,}"
 )
-print(f"  Participantes únicos: {participantes['id_f'].nunique()}")
-print(f"  Grupos: {txt['v_grupo'].nunique()} | Semanas: {txt['n_week'].nunique()}")
+print(f"  Participantes únicos: {participantes[COL_PARTICIPANT_ID].nunique()}")
+print(f"  Grupos: {txt[COL_GROUP].nunique()} | Semanas: {txt[COL_WEEK].nunique()}")
 print(f"  Sesiones P-P: {len(cadenas)} | ITs codificadas: {len(corpus)}")
 
 
@@ -113,25 +119,25 @@ def calcular_retencion(part_df):
     en qué semanas siguen activos. Retorna DataFrame con tasa de retención
     semanal global y por subgrupo.
     """
-    grupos = part_df["v_grupo"].unique()
+    grupos = part_df[COL_GROUP].unique()
     registros = []
 
     for grp in grupos:
-        sub = part_df[part_df["v_grupo"] == grp]
-        meta = sub[["v_grupo", "sex_grupo", "city_grupo"]].iloc[0]
+        sub = part_df[part_df[COL_GROUP] == grp]
+        meta = sub[[COL_GROUP, COL_GENDER_GROUP, COL_CITY]].iloc[0]
 
         # Participantes que aparecen en semana 1
-        week1 = set(sub[sub["n_week"] == 1]["id_f"].unique())
+        week1 = set(sub[sub[COL_WEEK] == 1][COL_PARTICIPANT_ID].unique())
         # Todos los participantes que alguna vez enviaron mensaje
-        ever_active = set(sub["id_f"].unique())
+        ever_active = set(sub[COL_PARTICIPANT_ID].unique())
 
         for sem in SEMANAS:
-            active_sem = set(sub[sub["n_week"] == sem]["id_f"].unique())
+            active_sem = set(sub[sub[COL_WEEK] == sem][COL_PARTICIPANT_ID].unique())
             registros.append(
                 {
                     "v_grupo": grp,
-                    "sex_grupo": meta["sex_grupo"],
-                    "city_grupo": meta["city_grupo"],
+                    "sex_grupo": meta[COL_GENDER_GROUP],
+                    "city_grupo": meta[COL_CITY],
                     "semana": sem,
                     "n_activos": len(active_sem),
                     "n_cohorte_s1": len(week1),
@@ -221,7 +227,7 @@ ax2_twin.tick_params(axis="y", labelcolor="red")
 ax2_twin.spines["top"].set_visible(False)
 
 fig.suptitle(
-    "Retención de participantes a lo largo del programa (semanas 1–12)",
+    f"Retención de participantes a lo largo del programa (semanas 1–{cfg['project']['duration_weeks']})",
     fontsize=12,
     fontweight="bold",
     y=1.01,
@@ -235,9 +241,11 @@ print(f"  Figura guardada: {out.name}")
 # Estadísticas clave para el resumen
 ret_s1 = ret_global.loc[1, "retencion_s1"]
 ret_s6 = ret_global.loc[6, "retencion_s1"]
-ret_s12 = ret_global.loc[12, "retencion_s1"]
+ret_s12 = ret_global.loc[cfg["project"]["duration_weeks"], "retencion_s1"]
 caida_max_idx = int(ret_global["retencion_s1"].diff().idxmin())
-print(f"  Retención global: S1=100% | S6={ret_s6:.0%} | S12={ret_s12:.0%}")
+print(
+    f"  Retención global: S1=100% | S6={ret_s6:.0%} | S{cfg['project']['duration_weeks']}={ret_s12:.0%}"
+)
 print(f"  Mayor caída entre semana {caida_max_idx - 1} y {caida_max_idx}")
 
 
@@ -249,18 +257,20 @@ print("\n--- A2: Perfil del facilitador vs. engagement P-P ---")
 
 # Métricas del facilitador por grupo
 fac_metrics = (
-    facilitadores.groupby("v_grupo")
+    facilitadores.groupby(COL_GROUP)
     .agg(
-        n_msgs_fac=("id_f", "count"),
+        n_msgs_fac=(COL_PARTICIPANT_ID, "count"),
         avg_len_fac=("len_texto", "mean"),
         median_len_fac=("len_texto", "median"),
-        sem_activas_fac=("n_week", "nunique"),
+        sem_activas_fac=(COL_WEEK, "nunique"),
     )
     .reset_index()
 )
+fac_metrics.rename(columns={COL_GROUP: "v_grupo"}, inplace=True)
 
 # Total mensajes por grupo (para calcular %)
-total_msgs = txt.groupby("v_grupo").size().reset_index(name="n_msgs_total")
+total_msgs = txt.groupby(COL_GROUP).size().reset_index(name="n_msgs_total")
+total_msgs.rename(columns={COL_GROUP: "v_grupo"}, inplace=True)
 fac_metrics = fac_metrics.merge(total_msgs, on="v_grupo")
 fac_metrics["pct_msgs_fac"] = fac_metrics["n_msgs_fac"] / fac_metrics["n_msgs_total"]
 
@@ -274,7 +284,9 @@ engagement = (
     )
     .reset_index()
 )
-engagement["pct_semanas_con_pp"] = engagement["sem_con_pp"] / 12
+engagement["pct_semanas_con_pp"] = (
+    engagement["sem_con_pp"] / cfg["project"]["duration_weeks"]
+)
 
 # También: N de ITs y % compleja desde el corpus 10d
 its_por_grupo = (
@@ -295,7 +307,15 @@ grp_full = fac_metrics.merge(engagement, on="v_grupo", how="left")
 grp_full = grp_full.merge(its_por_grupo, on="v_grupo", how="left")
 
 # Añadir género y ciudad
-meta = txt[["v_grupo", "sex_grupo", "city_grupo"]].drop_duplicates("v_grupo").copy()
+meta = txt[[COL_GROUP, COL_GENDER_GROUP, COL_CITY]].drop_duplicates(COL_GROUP).copy()
+meta.rename(
+    columns={
+        COL_GROUP: "v_grupo",
+        COL_GENDER_GROUP: "sex_grupo",
+        COL_CITY: "city_grupo",
+    },
+    inplace=True,
+)
 grp_full = grp_full.merge(meta, on="v_grupo", how="left")
 
 grp_full.to_csv(TABLES_OUT / "10e_facilitador_grupos.csv", index=False)
@@ -583,9 +603,10 @@ top_temas = (
     cadenas.groupby("tema")["sesion_id"].count().sort_values(ascending=False).head(3)
 )
 
+n_weeks = cfg["project"]["duration_weeks"]
 md = f"""## 14. Análisis de escalabilidad — Paso 10e
 
-**Orientado a:** Plan MEL 2026 — ingredientes Capacidad de implementación y Costo-efectividad
+**Orientado a:** Plan MEL — ingredientes Capacidad de implementación y Costo-efectividad
 
 **Inputs:** `mensajes_preprocesados.parquet` · `10a_cadenas_sesion.csv` · `10d_corpus_interaccion.csv`
 
@@ -599,20 +620,13 @@ md = f"""## 14. Análisis de escalabilidad — Paso 10e
 | S4 | {ret_s4:.0%} | {ret_gen_muj.get(4, float("nan")):.0%} | {ret_gen_hom.get(4, float("nan")):.0%} |
 | S6 | {ret_s6:.0%} | {ret_gen_muj.get(6, float("nan")):.0%} | {ret_gen_hom.get(6, float("nan")):.0%} |
 | S8 | {ret_s8:.0%} | {ret_gen_muj.get(8, float("nan")):.0%} | {ret_gen_hom.get(8, float("nan")):.0%} |
-| S12 | {ret_s12:.0%} | {ret_gen_muj.get(12, float("nan")):.0%} | {ret_gen_hom.get(12, float("nan")):.0%} |
+| S{n_weeks} | {ret_s12:.0%} | {ret_gen_muj.get(n_weeks, float("nan")):.0%} | {ret_gen_hom.get(n_weeks, float("nan")):.0%} |
 
 **Hallazgos clave:**
 
 - La mayor caída de retención ocurre entre la semana {caida_max_idx - 1} y {caida_max_idx}.
-- A la semana 12, la retención global es de {ret_s12:.0%} — los participantes que llegan
-  al final del programa son una minoría pero consistente.
-- La retención de mujeres y hombres sigue patrones similares; la brecha de *cantidad* de
-  participantes activos (mujeres 3.5x más) se mantiene estable a lo largo del programa,
-  no aumenta con el tiempo.
-
-**Implicación para escalabilidad:** el punto crítico de acompañamiento está en las semanas
-{caida_max_idx - 1}–{caida_max_idx}. Un protocolo de reenganche (mensaje del facilitador,
-contacto del TH) en ese momento podría reducir la deserción antes de que se vuelva definitiva.
+- A la semana {n_weeks}, la retención global es de {ret_s12:.0%}.
+- La retención de mujeres y hombres sigue patrones similares.
 
 ---
 
@@ -624,15 +638,6 @@ contacto del TH) en ese momento podría reducir la deserción antes de que se vu
 | % de mensajes del facilitador | {r_pct:.3f} ({"*" if p_pct < 0.05 else "ns"}) | {"Mayor proporción F → más sesiones P-P" if r_pct > 0 else "Mayor proporción F → menos sesiones P-P"} |
 
 *Spearman: len rho={rho_len:.3f} (p={rho_p_len:.3f}), pct rho={rho_pct:.3f} (p={rho_p_pct:.3f})*
-
-**Hallazgos clave:**
-
-- La relación entre el comportamiento del facilitador y el engagement P-P del grupo
-  {"es estadísticamente significativa para al menos una métrica." if p_len < 0.05 or p_pct < 0.05 else "no alcanza significancia estadística con el n de grupos disponible (n=" + str(len(df_corr)) + ")."}
-- {"Los facilitadores que escriben mensajes más largos tienden a generar más interacción entre participantes — posiblemente porque desarrollan más el contenido y generan más puntos de reflexión." if r_len > 0.1 else "El volumen de texto del facilitador no predice linealmente el engagement entre participantes."}
-- {"Los grupos donde el facilitador domina más la conversación (% msgs alto) muestran menos interacción P-P — hay un trade-off entre protagonismo del facilitador y espacio para los participantes." if r_pct < -0.1 else "La proporción de mensajes del facilitador no muestra una relación negativa clara con el engagement P-P."}
-
-**Implicación para el manual y entrenamiento:** {'El entrenamiento debería enfatizar dejar espacio a los participantes — los facilitadores que "llenan" la conversación dejan menos margen para la interacción horizontal.' if r_pct < -0.1 else "Se necesitan más datos o métricas adicionales (p.ej., tiempo de respuesta, tipo de pregunta) para caracterizar qué prácticas de facilitación predicen mayor engagement."}
 
 ---
 
@@ -662,22 +667,7 @@ md += """
 for tema, n in top_temas.items():
     md += f"| {abrev(tema, 60)} | {n} |\n"
 
-md += f"""
-**Hallazgos clave:**
-
-- Las semanas {best_sem} y sus adyacentes concentran más ITs — son los módulos de mayor
-  actividad horizontal entre participantes.
-- La semana {worst_sem} es la de menor engagement (chunk 4, semanas 7-8 en general muestran caída).
-- I8 (adopción de práctica) se concentra en las primeras 4 semanas, lo que sugiere que
-  el contenido inicial del programa tiene el impacto más directo sobre el cambio de comportamiento
-  reportado.
-- Los temas de mayor actividad P-P son módulos de contenido emocional y relacional,
-  no los puramente informativos.
-
-**Implicación para flexibilización de contenidos:** los módulos de las primeras semanas
-y los que generan más sesiones P-P son los menos flexibilizables. Los de semanas 7-8
-(donde cae el engagement) son candidatos a revisión o intervención de diseño.
-
+md += """
 ---
 
 **Figuras:**

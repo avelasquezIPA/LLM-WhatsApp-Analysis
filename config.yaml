@@ -71,6 +71,10 @@ data:
     datetime: "datetime"          # Fecha y hora del mensaje
     theme: "tema"                 # Tema/sesión del programa
 
+    # Identificadores de participante y grupo [ADAPTAR si difieren en tus datos].
+    participant_id: "id_f"          # Identificador único de cada participante
+    gender_group: "sex_grupo"       # Categoría de género del grupo (Mujer/Hombre)
+
     # Columnas calculadas por el pipeline (no requieren adaptación):
     word_count: "n_palabras"
     char_count: "n_caracteres"
@@ -131,6 +135,7 @@ api:
   max_tokens_summary: 400     # tokens máximos por resumen de chunk (paso 06a)
   max_tokens_executive: 1000  # tokens máximos para resumen ejecutivo (paso 06c)
   max_tokens_rag: 800         # tokens máximos para respuesta RAG (paso 05b)
+  rag_default_n_results: 4    # chunks a recuperar por defecto en búsqueda semántica
 
 
 # =============================================================================
@@ -239,6 +244,12 @@ analysis:
     top_k_chunks: 3
     top_k_messages: 5
     min_message_words: 5
+    # Familias del árbol de códigos a incluir en la búsqueda [ADAPTAR]
+    relevant_families:
+      - "5. ACTITUD DE LOS PARTICIPANTES FRENTE AL PROGRAMA"
+      - "7. RESULTADOS INICIALES E INTERMEDIOS"
+      - "3. ENFOQUE PARA ESCALAR"
+      - "4. VIABILIDAD DE LA IMPLEMENTACIÓN"
 
   # Monitoreo de latencia de respuesta (paso 10f) — en horas
   latency_categories:
@@ -358,25 +369,22 @@ coding:
 
     - id: "I7"
       level: "Interacción compleja"
-      name: "Co-construcción de conocimiento"
+      name: "Identidades compartidas"
       definition_dedios: >
-        Los participantes construyen colectivamente nuevo conocimiento o
-        soluciones a través del diálogo.
+        Los participantes co-construyen una identidad colectiva como grupo.
       adaptation: >
-        Participantes llegan juntos a una conclusión nueva, estrategia
-        o aprendizaje que ninguno tenía solo al inicio.
-      template_code: "I7_conocimiento"
+        Uso del 'nosotros' inclusivo: 'nosotras como madres...',
+        'como papás entendemos...'. Diferente del 'nosotros' familiar.
+      template_code: "I7_identidad"
 
     - id: "I8"
-      level: "Interacción compleja"
-      name: "Apoyo emocional mutuo"
-      definition_dedios: >
-        Los participantes se brindan apoyo emocional entre sí de manera
-        recíproca y explícita.
+      level: "Específico Apapachar"
+      name: "Adopción de práctica reportada"
+      definition_dedios: "N/A — indicador nuevo propuesto para intervenciones"
       adaptation: >
-        Un participante responde emocionalmente al relato de otro:
-        empatía, validación, acompañamiento.
-      template_code: "I8_apoyo"
+        Un participante reporta explícitamente haber aplicado algo del
+        programa en casa durante la semana. Evidencia directa de transferencia.
+      template_code: "I8_adopcion_practica"
 
 
 # =============================================================================

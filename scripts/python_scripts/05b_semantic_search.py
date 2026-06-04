@@ -19,21 +19,27 @@ Input:  data/vectorstore/ (ChromaDB)
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 import anthropic
 import chromadb
+from config_loader import DATA_DIR, PROJECT_ROOT, cfg
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 
 # ---------------------------------------------------------------------------
-# Configuración
+# Configuración (valores leídos de config.yaml)
 # ---------------------------------------------------------------------------
-ROOT = Path(__file__).resolve().parents[2]
-VECTORSTORE_PATH = ROOT / "data" / "vectorstore"
-MODELO_NOMBRE = "paraphrase-multilingual-mpnet-base-v2"
+VECTORSTORE_PATH = DATA_DIR / cfg["data"]["intermediate"]["vectorstore"]
+MODELO_NOMBRE = cfg["models"]["embedding_model"]
+COLECCION_NOMBRE = cfg["vectordb"]["collection_chunks"]
+CLAUDE_MODEL = cfg["models"]["claude_model"]
+MAX_TOKENS_RAG = cfg["api"]["max_tokens_rag"]
+DEFAULT_N_RESULTS = cfg["api"]["rag_default_n_results"]
+PROJECT_NAME = cfg["project"]["name"]
+PROJECT_DESC = cfg["project"]["description"]
+_PROMPT_TEMPLATE = cfg["prompts"]["rag_answer"]
 
-load_dotenv(ROOT / ".env")
+load_dotenv(PROJECT_ROOT / ".env")
 
 # ---------------------------------------------------------------------------
 # Inicializar clientes (se cargan una sola vez)
@@ -43,7 +49,7 @@ modelo = SentenceTransformer(MODELO_NOMBRE)
 
 print("Conectando a ChromaDB...")
 cliente_chroma = chromadb.PersistentClient(path=str(VECTORSTORE_PATH))
-coleccion = cliente_chroma.get_collection("apapachar_chunks")
+coleccion = cliente_chroma.get_collection(COLECCION_NOMBRE)
 print(f"  {coleccion.count()} chunks disponibles.\n")
 
 cliente_claude = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
@@ -79,7 +85,9 @@ def buscar_chunks(pregunta: str, n_resultados: int = 5) -> list[dict]:
     return chunks
 
 
-def responder(pregunta: str, n_chunks: int = 4, verbose: bool = True) -> str:
+def responder(
+    pregunta: str, n_chunks: int = DEFAULT_N_RESULTS, verbose: bool = True
+) -> str:
     """Responde una pregunta de investigación usando RAG.
 
     Args:
@@ -109,25 +117,16 @@ def responder(pregunta: str, n_chunks: int = 4, verbose: bool = True) -> str:
         ]
     )
 
-    prompt = f"""Eres un asistente de investigación del Programa Apapachar, \
-un programa de crianza positiva y prevención de violencia contra la niñez \
-en Colombia.
-
-Responde la siguiente pregunta basándote ÚNICAMENTE en los mensajes de \
-WhatsApp proporcionados. Si la información no está en los mensajes, dilo \
-explícitamente. Cita el chunk relevante cuando sea posible.
-
-PREGUNTA:
-{pregunta}
-
-MENSAJES RELEVANTES:
-{contexto}
-
-RESPUESTA:"""
+    prompt = _PROMPT_TEMPLATE.format(
+        project_name=PROJECT_NAME,
+        project_description=PROJECT_DESC,
+        pregunta=pregunta,
+        contexto=contexto,
+    )
 
     respuesta = cliente_claude.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=800,
+        model=CLAUDE_MODEL,
+        max_tokens=MAX_TOKENS_RAG,
         messages=[{"role": "user", "content": prompt}],
     )
     return respuesta.content[0].text

@@ -22,38 +22,43 @@ Output:
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import chromadb
 import pandas as pd
+from config_loader import DATA_DIR, PROJECT_ROOT, TABLES_DIR, cfg
 from sentence_transformers import SentenceTransformer
 
 # ---------------------------------------------------------------------------
-# Configuración
+# Configuración (valores leídos de config.yaml)
 # ---------------------------------------------------------------------------
-ROOT = Path(__file__).resolve().parents[2]
-ARBOL_PATH = ROOT / "documentation" / "A+P_2025_Arbol de códigos.xlsx"
-VECTORSTORE_PATH = ROOT / "data" / "vectorstore"
-MENSAJES_PATH = ROOT / "data" / "clean" / "mensajes_preprocesados.parquet"
-OUT_PATH = ROOT / "outputs" / "tables" / "08_citas_por_codigo.xlsx"
+ARBOL_PATH = PROJECT_ROOT / cfg["data"]["input"]["coding_tree_file"]
+VECTORSTORE_PATH = DATA_DIR / cfg["data"]["intermediate"]["vectorstore"]
+MENSAJES_PATH = PROJECT_ROOT / cfg["data"]["intermediate"]["preprocessed_messages"]
+OUT_PATH = TABLES_DIR / "08_citas_por_codigo.xlsx"
 
-MODELO_NOMBRE = "paraphrase-multilingual-mpnet-base-v2"
-N_CHUNKS = 3  # chunks más similares por código
-N_MENSAJES = 5  # mensajes individuales más similares por código
+MODELO_NOMBRE = cfg["models"]["embedding_model"]
+N_CHUNKS = cfg["analysis"]["citation_search"]["top_k_chunks"]
+N_MENSAJES = cfg["analysis"]["citation_search"]["top_k_messages"]
+MIN_MSG_WORDS = cfg["analysis"]["citation_search"]["min_message_words"]
+FAMILIAS_REL = cfg["analysis"]["citation_search"]["relevant_families"]
 
-# Familias a incluir en la búsqueda (las más relevantes para WA)
-FAMILIAS_RELEVANTES = [
-    "5. ACTITUD DE LOS PARTICIPANTES FRENTE AL PROGRAMA",
-    "7. RESULTADOS INICIALES E INTERMEDIOS",
-    "3. ENFOQUE PARA ESCALAR",
-    "4. VIABILIDAD DE LA IMPLEMENTACIÓN",
-]
+COLECCION_CHUNKS = cfg["vectordb"]["collection_chunks"]
+COLECCION_MENSAJES = cfg["vectordb"]["collection_messages"]
+
+COL_TEXT = cfg["data"]["columns"]["message_text"]
+COL_SENDER = cfg["data"]["columns"]["sender"]
+COL_CITY = cfg["data"]["columns"]["city_group"]
+COL_WEEK = cfg["data"]["columns"]["week_number"]
+COL_THEME = cfg["data"]["columns"]["theme"]
+COL_DATETIME = cfg["data"]["columns"]["datetime"]
+COL_NWORDS = cfg["data"]["columns"]["word_count"]
+
+ARBOL_SHEET = cfg["data"]["input"]["coding_tree_sheet"]
 
 # ---------------------------------------------------------------------------
 # 1. Cargar árbol de códigos
 # ---------------------------------------------------------------------------
 print("Cargando árbol de códigos...")
-df_arbol = pd.read_excel(ARBOL_PATH)
+df_arbol = pd.read_excel(ARBOL_PATH, sheet_name=ARBOL_SHEET)
 df_arbol.columns = ["_", "familia", "codigo", "descripcion", "subcod", "cambios"]
 df_arbol = df_arbol[["familia", "codigo", "descripcion"]].dropna(subset=["codigo"])
 
@@ -66,7 +71,7 @@ print(f"  Familias: {df_arbol['familia'].nunique()}")
 
 # Filtrar solo familias relevantes para mensajes de WA
 mask_relevante = df_arbol["familia"].str.contains(
-    "|".join([f[:10] for f in FAMILIAS_RELEVANTES]), na=False
+    "|".join([f[:10] for f in FAMILIAS_REL]), na=False
 )
 df_relevante = df_arbol[mask_relevante].copy()
 print(f"  Códigos en familias relevantes: {len(df_relevante)}")
@@ -79,13 +84,11 @@ modelo = SentenceTransformer(MODELO_NOMBRE)
 
 print("Conectando a ChromaDB...")
 cliente = chromadb.PersistentClient(path=str(VECTORSTORE_PATH))
-coleccion_chunks = cliente.get_collection("apapachar_chunks")
+coleccion_chunks = cliente.get_collection(COLECCION_CHUNKS)
 
 # ---------------------------------------------------------------------------
 # 3. Crear colección de mensajes individuales (si no existe)
 # ---------------------------------------------------------------------------
-COLECCION_MENSAJES = "apapachar_mensajes"
-
 try:
     coleccion_mensajes = cliente.get_collection(COLECCION_MENSAJES)
     print(f"Colección de mensajes existente: {coleccion_mensajes.count()} mensajes.")
@@ -93,15 +96,15 @@ except Exception:
     print("Creando colección de mensajes individuales...")
     df_msgs = pd.read_parquet(MENSAJES_PATH)
 
-    # Solo mensajes con contenido suficiente (>= 5 palabras)
-    df_msgs["n_palabras"] = df_msgs["texto"].str.split().str.len()
-    df_msgs = df_msgs[df_msgs["n_palabras"] >= 5].reset_index(drop=True)
+    # Solo mensajes con contenido suficiente
+    df_msgs[COL_NWORDS] = df_msgs[COL_TEXT].str.split().str.len()
+    df_msgs = df_msgs[df_msgs[COL_NWORDS] >= MIN_MSG_WORDS].reset_index(drop=True)
     print(f"  Mensajes a indexar: {len(df_msgs)}")
 
     # Generar embeddings por lotes
     print("  Generando embeddings de mensajes (puede tomar 1-2 min)...")
     emb_msgs = modelo.encode(
-        df_msgs["texto"].tolist(),
+        df_msgs[COL_TEXT].tolist(),
         show_progress_bar=True,
         batch_size=64,
     )
@@ -112,21 +115,21 @@ except Exception:
         metadata={"hnsw:space": "cosine"},
     )
 
-    # Insertar en lotes de 500
-    batch_size = 500
+    # Insertar en lotes
+    batch_size = cfg["analysis"]["vectordb_batch_size"]
     for i in range(0, len(df_msgs), batch_size):
         batch = df_msgs.iloc[i : i + batch_size]
         emb_batch = emb_msgs[i : i + batch_size]
         coleccion_mensajes.add(
-            documents=batch["texto"].tolist(),
+            documents=batch[COL_TEXT].tolist(),
             embeddings=emb_batch.tolist(),
             metadatas=[
                 {
-                    "remitente": str(r["remitente"]),
-                    "city_grupo": str(r["city_grupo"]),
-                    "n_week": int(r["n_week"]),
-                    "tema": str(r["tema"]),
-                    "datetime": str(r["datetime"]),
+                    COL_SENDER: str(r[COL_SENDER]),
+                    COL_CITY: str(r[COL_CITY]),
+                    COL_WEEK: int(r[COL_WEEK]),
+                    COL_THEME: str(r[COL_THEME]),
+                    COL_DATETIME: str(r[COL_DATETIME]),
                 }
                 for _, r in batch.iterrows()
             ],
@@ -172,9 +175,9 @@ for i, (_, row) in enumerate(df_relevante.iterrows(), 1):
                 "codigo": codigo,
                 "descripcion_codigo": descripcion,
                 "chunk_id": meta["chunk_id"],
-                "ciudad": meta["city_grupo"],
-                "semana": meta["n_week"],
-                "tema": meta["tema"],
+                "ciudad": meta[COL_CITY],
+                "semana": meta[COL_WEEK],
+                "tema": meta[COL_THEME],
                 "similitud": round(1 - dist, 3),
                 "extracto_chunk": extracto,
             }
@@ -196,10 +199,10 @@ for i, (_, row) in enumerate(df_relevante.iterrows(), 1):
                 "familia": familia,
                 "codigo": codigo,
                 "descripcion_codigo": descripcion,
-                "remitente": meta["remitente"],
-                "ciudad": meta["city_grupo"],
-                "semana": meta["n_week"],
-                "tema": meta["tema"],
+                "remitente": meta[COL_SENDER],
+                "ciudad": meta[COL_CITY],
+                "semana": meta[COL_WEEK],
+                "tema": meta[COL_THEME],
                 "similitud": round(1 - dist, 3),
                 "mensaje": doc,
             }
