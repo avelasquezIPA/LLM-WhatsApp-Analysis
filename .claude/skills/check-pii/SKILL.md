@@ -40,6 +40,7 @@ suggest PII:
 
 For columns that contain free text (message content), estimates whether messages
 contain patterns suggesting PII:
+
 - Phone-number patterns (`3\d{9}`, `+57...`)
 - Email patterns (`@`)
 - Number sequences that could be IDs

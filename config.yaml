@@ -42,7 +42,8 @@ data:
   input:
     # Archivo Stata con los mensajes anonimizados (sin PII).
     # Producido por scripts/do_files/01_remove_pii.do
-    raw_stata_file: "data/raw/full_base_WA_clean_NOPII.dta"
+    # Para tu proyecto: cambia a la ruta de tu archivo limpio.
+    raw_stata_file: "data/raw/DatosEjemplos-FalsePII.dta"
 
     # Archivo Excel con el árbol de códigos temáticos del proyecto.
     # Solo necesario para el paso 08 (citation finder).

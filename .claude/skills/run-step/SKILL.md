@@ -14,6 +14,7 @@ Executes a step of the LLM WhatsApp analysis pipeline with pre-flight validation
 ```
 
 Where `<step>` is one of:
+
 - A step number: `1`, `3`, `06`, `10c`
 - A partial script name: `chunking`, `summarization`
 
@@ -45,6 +46,7 @@ Where `<step>` is one of:
 ### 1. Parse the requested step
 
 Match the user's input to the correct script name:
+
 - `3` or `03` or `chunking` → `03_chunking.py`
 - `10c` or `codificacion` → `10c_codificacion.py`
 - `6` or `06` or `summarization` → `06_summarization.py`
@@ -75,6 +77,7 @@ cd scripts/python_scripts && uv run python <script_name>.py
 ### 4. Report results
 
 After the script completes:
+
 - Report which output files were generated (from the step map)
 - Report any errors or warnings
 - Suggest the logical next step in the pipeline

@@ -100,6 +100,7 @@ cd scripts/python_scripts && uv run python 10c_codificacion.py
 ### 4. Output
 
 The script generates:
+
 - `outputs/tables/10c_chunk1.xlsx` — First sample batch
 - `outputs/tables/10c_chunk2.xlsx` — Second sample batch
 - `outputs/tables/10c_grupos_representativos.csv` — Which chunks were sampled
@@ -114,6 +115,7 @@ To replace Dedios-Sanguineti with a different coding framework:
 4. Run `/code-framework`
 
 The script will automatically:
+
 - Build the guide sheet with your indicator names and descriptions
 - Use your `adaptation` text in the specific column
 - Apply your positive/negative code lists for scoring
