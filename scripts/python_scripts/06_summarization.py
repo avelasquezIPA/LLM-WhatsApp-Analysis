@@ -52,6 +52,7 @@ CITIES = cfg["project"]["cities"]
 COL_CITY = cfg["data"]["columns"]["city_group"]
 COL_WEEK = cfg["data"]["columns"]["week_number"]
 COL_THEME = cfg["data"]["columns"]["theme"]
+CHUNK_GROUPBY = cfg["data"]["chunking"]["groupby"]
 
 # ---------------------------------------------------------------------------
 # Cliente Claude
@@ -67,15 +68,19 @@ _PROMPT_RESUMEN_TEMPLATE = cfg["prompts"]["chunk_summary"]
 
 def resumir_chunk(row: pd.Series) -> str:
     """Genera un resumen para un chunk individual."""
-    prompt = _PROMPT_RESUMEN_TEMPLATE.format(
-        project_name=PROJECT_NAME,
-        project_description=PROJECT_DESC,
-        project_focus=PROJECT_FOCUS,
-        ciudad=row[COL_CITY],
-        semana=row[COL_WEEK],
-        tema=row[COL_THEME],
-        texto_chunk=row["texto_chunk"],
-    )
+    kwargs = {
+        "project_name": PROJECT_NAME,
+        "project_description": PROJECT_DESC,
+        "project_focus": PROJECT_FOCUS,
+        "tema": row.get(COL_THEME, ""),
+        "texto_chunk": row["texto_chunk"],
+        # Aliases de compatibilidad para prompts estilo Apapachar
+        "ciudad": row.get(COL_CITY, ""),
+        "semana": row.get(COL_WEEK, ""),
+    }
+    for col in CHUNK_GROUPBY:
+        kwargs.setdefault(col, row.get(col, ""))
+    prompt = _PROMPT_RESUMEN_TEMPLATE.format(**kwargs)
     respuesta = cliente.messages.create(
         model=MODELO,
         max_tokens=MAX_TOKENS_SUMMARY,
@@ -112,17 +117,17 @@ def paso_6a(chunks: pd.DataFrame) -> pd.DataFrame:
     chunks = chunks.copy()
     chunks["resumen"] = resumenes
 
-    # Guardar
+    # Guardar — solo columnas que existen en el DataFrame
     cols = [
         "chunk_id",
-        COL_CITY,
-        COL_WEEK,
+        *CHUNK_GROUPBY,
         COL_THEME,
         "n_mensajes",
         "n_participante",
         "tokens_aprox",
         "resumen",
     ]
+    cols = [c for c in cols if c in chunks.columns]
     chunks[cols].to_csv(OUT_TABLES / "06a_resumenes_chunks.csv", index=False)
     print("\n  Resúmenes guardados en outputs/tables/06a_resumenes_chunks.csv")
 
@@ -139,26 +144,29 @@ def paso_6c(chunks_con_resumenes: pd.DataFrame) -> str:
     """Genera resumen ejecutivo a partir de los resúmenes individuales."""
     print("\n=== PASO 6c: Resumen ejecutivo (map-reduce) ===")
 
-    # Organizar resúmenes por ciudad y semana
+    # Organizar resúmenes por columna primaria del groupby
+    _primary = CHUNK_GROUPBY[0]
+    _secondary = CHUNK_GROUPBY[1:]
     lineas = []
-    for ciudad in sorted(chunks_con_resumenes[COL_CITY].unique()):
-        lineas.append(f"\n## {ciudad}")
-        ciudad_chunks = chunks_con_resumenes[
-            chunks_con_resumenes[COL_CITY] == ciudad
-        ].sort_values(COL_WEEK)
-        for _, row in ciudad_chunks.iterrows():
+    for grp_val in sorted(chunks_con_resumenes[_primary].unique()):
+        lineas.append(f"\n## {grp_val}")
+        subset = chunks_con_resumenes[chunks_con_resumenes[_primary] == grp_val]
+        if _secondary:
+            subset = subset.sort_values(_secondary)
+        for _, row in subset.iterrows():
             if row["resumen"]:
-                lineas.append(
-                    f"\nSemana {row[COL_WEEK]} - {row[COL_THEME]}:\n{row['resumen']}"
-                )
+                sec_label = " - ".join(str(row.get(c, "")) for c in _secondary)
+                tema_str = f" - {row[COL_THEME]}" if row.get(COL_THEME) else ""
+                lineas.append(f"\n{sec_label}{tema_str}:\n{row['resumen']}")
 
     texto_resumenes = "\n".join(lineas)
+    primary_vals = sorted(chunks_con_resumenes[_primary].unique())
     prompt = _PROMPT_EJECUTIVO_TEMPLATE.format(
         project_name=PROJECT_NAME,
         project_description=PROJECT_DESC,
         n_chunks=len(chunks_con_resumenes),
-        n_cities=len(CITIES),
-        cities_list=", ".join(CITIES),
+        n_cities=len(primary_vals),  # alias backward-compat
+        cities_list=", ".join(str(v) for v in primary_vals),
         n_weeks=N_WEEKS,
         resumenes=texto_resumenes,
     )

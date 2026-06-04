@@ -87,6 +87,21 @@ data:
     n_messages_chunk: "n_mensajes"
     tokens_approx: "tokens_aprox"
 
+  # Estrategia de chunking [ADAPTAR para datos transversales].
+  # Define qué columnas agrupan los mensajes en una unidad de análisis.
+  #
+  # Datos longitudinales (en el tiempo):
+  #   groupby: ["city_grupo", "n_week"]  →  un chunk por ciudad × semana
+  # Datos transversales (una sola toma):
+  #   groupby: ["v_grupo"]              →  un chunk por grupo de WhatsApp
+  #
+  # Nota: los scripts 10e (retención) y 10f (latencia) solo aplican
+  # con datos longitudinales. El resto del pipeline funciona en ambos casos.
+  chunking:
+    groupby:
+      - "city_grupo"
+      - "n_week"
+
   # Valores específicos usados para filtrar el dataset [ADAPTAR].
   values:
     text_message_type: "Mensaje en Texto"   # Valor en `message_type` para mensajes de texto

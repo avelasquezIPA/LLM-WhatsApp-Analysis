@@ -42,6 +42,8 @@ FAMILIAS_REL = cfg["analysis"]["citation_search"]["relevant_families"]
 COLECCION_CHUNKS = cfg["vectordb"]["collection_chunks_participants"]
 COLECCION_MENSAJES = cfg["vectordb"]["collection_messages_participants"]
 
+CHUNK_GROUPBY = cfg["data"]["chunking"]["groupby"]
+
 COL_TEXT = cfg["data"]["columns"]["message_text"]
 COL_SENDER = cfg["data"]["columns"]["sender"]
 COL_CITY = cfg["data"]["columns"]["city_group"]
@@ -103,16 +105,19 @@ except Exception:
 
     # Reconstruir chunks solo con mensajes de participantes
     registros = []
-    for (ciudad, semana), grupo in df_part.groupby([COL_CITY, COL_WEEK], observed=True):
+    for keys, grupo in df_part.groupby(CHUNK_GROUPBY, observed=True):
+        if not isinstance(keys, tuple):
+            keys = (keys,)
+        meta = dict(zip(CHUNK_GROUPBY, keys))
+        chunk_id = "_".join(str(v) for v in keys)
         grupo = grupo.sort_values(COL_DATETIME).reset_index(drop=True)
         lineas = [f"[{i + 1}] {row[COL_TEXT]}" for i, row in grupo.iterrows()]
         texto_chunk = "\n".join(lineas)
         tema = grupo[COL_THEME].iloc[0] if COL_THEME in grupo.columns else ""
         registros.append(
             {
-                "chunk_id": f"{ciudad}_s{semana:02d}",
-                COL_CITY: str(ciudad),
-                COL_WEEK: int(semana),
+                "chunk_id": chunk_id,
+                **{k: str(v) for k, v in meta.items()},
                 COL_THEME: str(tema),
                 "n_mensajes": len(grupo),
                 "texto_chunk": texto_chunk,
@@ -139,8 +144,7 @@ except Exception:
         metadatas=[
             {
                 "chunk_id": r["chunk_id"],
-                COL_CITY: r[COL_CITY],
-                COL_WEEK: r[COL_WEEK],
+                **{col: r[col] for col in CHUNK_GROUPBY},
                 COL_THEME: r[COL_THEME],
             }
             for _, r in df_chunks.iterrows()

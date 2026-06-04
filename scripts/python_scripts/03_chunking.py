@@ -30,6 +30,7 @@ COL_THEME = cfg["data"]["columns"]["theme"]
 FACILITATOR = cfg["data"]["values"]["facilitator_sender"]
 PARTICIPANT = cfg["data"]["values"]["participant_sender"]
 TOKENS_RATIO = cfg["analysis"]["words_to_tokens_ratio"]
+CHUNK_GROUPBY = cfg["data"]["chunking"]["groupby"]
 
 # ---------------------------------------------------------------------------
 # 1. Carga
@@ -41,10 +42,16 @@ print(f"  Mensajes: {len(df)}")
 # ---------------------------------------------------------------------------
 # 2. Construir chunks
 # ---------------------------------------------------------------------------
-print("Construyendo chunks city_grupo x n_week...")
+groupby_str = " x ".join(CHUNK_GROUPBY)
+print(f"Construyendo chunks ({groupby_str})...")
 
 registros = []
-for (ciudad, semana), grupo in df.groupby([COL_CITY, COL_WEEK], observed=True):
+for keys, grupo in df.groupby(CHUNK_GROUPBY, observed=True):
+    if not isinstance(keys, tuple):
+        keys = (keys,)
+    meta = dict(zip(CHUNK_GROUPBY, keys))
+    chunk_id = "_".join(str(v) for v in keys)
+
     grupo = grupo.sort_values(COL_DATETIME).reset_index(drop=True)
 
     # Texto del chunk: mensajes numerados con remitente
@@ -64,9 +71,8 @@ for (ciudad, semana), grupo in df.groupby([COL_CITY, COL_WEEK], observed=True):
 
     registros.append(
         {
-            "chunk_id": f"{ciudad}_s{semana:02d}",
-            COL_CITY: ciudad,
-            COL_WEEK: semana,
+            "chunk_id": chunk_id,
+            **meta,
             COL_THEME: tema,
             "n_mensajes": len(grupo),
             "n_facilitador": n_facilitador,

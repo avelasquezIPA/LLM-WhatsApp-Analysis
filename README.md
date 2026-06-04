@@ -455,8 +455,36 @@ uv run python scripts/python_scripts/10f_monitoreo_inicio_semana.py  # latencia 
 ## Adaptar a un nuevo proyecto
 
 Todo lo específico del proyecto está en **`config.yaml`** en la raíz.
-Un nuevo proyecto solo necesita editar este archivo; ningún script
-necesita cambios.
+Un nuevo proyecto solo necesita editar este archivo; ningún script necesita cambios.
+
+### Datos longitudinales vs. transversales
+
+El pipeline funciona con **ambos tipos de datos**:
+
+- **Longitudinal** (datos en el tiempo, ej. Apapáchar): grupos de WhatsApp
+  que interactúan durante múltiples semanas. La unidad de análisis es
+  `ciudad × semana`.
+- **Transversal** (una sola toma, ej. grupos focales, encuesta única): grupos
+  que interactúan una sola vez sin estructura temporal. La unidad de análisis
+  es el grupo completo.
+
+El único parámetro que cambia es `data.chunking.groupby`:
+
+```yaml
+data:
+  chunking:
+    # Longitudinal — un chunk por ciudad × semana:
+    groupby: ["city_grupo", "n_week"]
+
+    # Transversal — un chunk por grupo de WhatsApp:
+    # groupby: ["v_grupo"]
+```
+
+Los scripts de análisis temporal (10e retención, 10f latencia por semana)
+solo aplican con datos longitudinales y se omiten automáticamente si el
+`groupby` no incluye la columna de semana.
+
+### Secciones a editar en config.yaml
 
 Las secciones marcadas con `[ADAPTAR]` son las que debes revisar:
 
@@ -466,8 +494,8 @@ Las secciones marcadas con `[ADAPTAR]` son las que debes revisar:
 # =============================================================================
 project:
   name: "Nombre de tu programa"
-  duration_weeks: 12          # Duración en semanas
-  cities:                     # Lista de ciudades/sitios (igual que en los datos)
+  duration_weeks: 12          # Semanas de duración (longitudinal) o 1 (transversal)
+  cities:                     # Lista de sitios (igual que aparecen en los datos)
     - "Ciudad1"
     - "Ciudad2"
 
@@ -484,12 +512,16 @@ data:
     message_text: "texto"
     sender: "remitente"
     city_group: "city_grupo"
-    week_number: "n_week"
+    week_number: "n_week"     # No necesario para datos transversales
     group_id: "v_grupo"
     datetime: "datetime"
     theme: "tema"
     participant_id: "id_f"
     gender_group: "sex_grupo"
+
+  chunking:
+    groupby: ["city_grupo", "n_week"]   # Longitudinal
+    # groupby: ["v_grupo"]              # Transversal
 
   values:                     # Valores que distinguen participantes de facilitadores
     text_message_type: "Mensaje en Texto"
@@ -497,17 +529,12 @@ data:
     facilitator_sender: "Facilitador"
 
 # =============================================================================
-# MODELOS
-# =============================================================================
-models:
-  claude_model: "claude-sonnet-4-6"   # Modelo Claude a usar
-
-# =============================================================================
 # PROMPTS [ADAPTAR]
 # =============================================================================
 prompts:
   chunk_summary: |
     Eres un asistente del {project_name}...
+    # Usar {ciudad} y {semana} para longitudinal, o las columnas del groupby
     # Los {marcadores} se reemplazan automáticamente en tiempo de ejecución
 ```
 

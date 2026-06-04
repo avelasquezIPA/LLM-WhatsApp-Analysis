@@ -44,6 +44,8 @@ CIUDADES_COLORES = cfg["visualization"]["colors"]["cities"]
 PROJECT_NAME = cfg["project"]["name"]
 COL_CITY = cfg["data"]["columns"]["city_group"]
 COL_WEEK = cfg["data"]["columns"]["week_number"]
+CHUNK_GROUPBY = cfg["data"]["chunking"]["groupby"]
+IS_LONGITUDINAL = COL_WEEK in CHUNK_GROUPBY
 COL_DATETIME = cfg["data"]["columns"]["datetime"]
 COL_SENDER = cfg["data"]["columns"]["sender"]
 COL_TEXT = cfg["data"]["columns"]["message_text"]
@@ -68,16 +70,19 @@ print(f"  Mensajes de facilitadores excluidos: {len(df) - len(df_part)}")
 # ---------------------------------------------------------------------------
 print("\nConstruyendo chunks de participantes (ciudad x semana)...")
 registros = []
-for (ciudad, semana), grupo in df_part.groupby([COL_CITY, COL_WEEK], observed=True):
+for keys, grupo in df_part.groupby(CHUNK_GROUPBY, observed=True):
+    if not isinstance(keys, tuple):
+        keys = (keys,)
+    meta = dict(zip(CHUNK_GROUPBY, keys))
+    chunk_id = "_".join(str(v) for v in keys)
     grupo = grupo.sort_values(COL_DATETIME).reset_index(drop=True)
     lineas = [f"[{i + 1}] {row[COL_TEXT]}" for i, row in grupo.iterrows()]
     texto_chunk = "\n".join(lineas)
     tema = grupo[COL_THEME].iloc[0] if COL_THEME in grupo.columns else ""
     registros.append(
         {
-            "chunk_id": f"{ciudad}_s{semana:02d}",
-            COL_CITY: ciudad,
-            COL_WEEK: semana,
+            "chunk_id": chunk_id,
+            **meta,
             COL_THEME: tema,
             "n_mensajes": len(grupo),
             "texto_chunk": texto_chunk,
@@ -114,11 +119,13 @@ print(f"  {len(ids)} embeddings generados ({embeddings.shape[1]} dimensiones).")
 print("\nCalculando matriz de similitud...")
 sim_matrix = cosine_similarity(embeddings)
 
-chunks_sorted = chunks.sort_values([COL_CITY, COL_WEEK]).reset_index(drop=True)
+chunks_sorted = chunks.sort_values(CHUNK_GROUPBY).reset_index(drop=True)
 order_idx = [ids.index(c) for c in chunks_sorted["chunk_id"]]
 sim_ordered = sim_matrix[np.ix_(order_idx, order_idx)]
 
-labels = [f"{r[COL_CITY][:3]}_s{r[COL_WEEK]:02d}" for _, r in chunks_sorted.iterrows()]
+labels = [
+    "_".join(str(r[col]) for col in CHUNK_GROUPBY) for _, r in chunks_sorted.iterrows()
+]
 
 sim_df = pd.DataFrame(sim_ordered, index=labels, columns=labels)
 sim_df.to_csv(OUT_TABLES / "07b_similarity_matrix_participantes.csv")
@@ -131,8 +138,9 @@ print("\nGenerando heatmap...")
 
 separadores = []
 acum = 0
-for ciudad in sorted(chunks_sorted[COL_CITY].unique()):
-    n = (chunks_sorted[COL_CITY] == ciudad).sum()
+_primary = CHUNK_GROUPBY[0]
+for grp_val in sorted(chunks_sorted[_primary].unique()):
+    n = (chunks_sorted[_primary] == grp_val).sum()
     acum += n
     separadores.append(acum)
 
@@ -150,24 +158,25 @@ ax.set_xticklabels(labels, rotation=90, fontsize=7)
 ax.set_yticklabels(labels, fontsize=7)
 
 acum = 0
-for ciudad in sorted(chunks_sorted[COL_CITY].unique()):
-    n = (chunks_sorted[COL_CITY] == ciudad).sum()
+_primary = CHUNK_GROUPBY[0]
+for grp_val in sorted(chunks_sorted[_primary].unique()):
+    n = (chunks_sorted[_primary] == grp_val).sum()
     mid = acum + n / 2 - 0.5
     ax.text(
         -1.5,
         mid,
-        ciudad,
+        str(grp_val),
         ha="right",
         va="center",
         fontsize=9,
         fontweight="bold",
-        color=CIUDADES_COLORES.get(ciudad, "black"),
+        color=CIUDADES_COLORES.get(str(grp_val), "black"),
     )
     acum += n
 
 ax.set_title(
     f"Mapa de similitud semántica entre chunks - Solo participantes\n"
-    f"{PROJECT_NAME} (ciudad x semana)",
+    f"{PROJECT_NAME} ({' x '.join(CHUNK_GROUPBY)})",
     fontsize=13,
     pad=15,
 )
@@ -179,154 +188,163 @@ print("  Heatmap guardado.")
 # ---------------------------------------------------------------------------
 # 6. Figura 2: Evolución semántica por semana
 # ---------------------------------------------------------------------------
-print("\nCalculando evolución semántica...")
+if IS_LONGITUDINAL:
+    print("\nCalculando evolución semántica...")
 
-semanas = sorted(chunks[COL_WEEK].unique())
-emb_por_semana = []
-for s in semanas:
-    mask = chunks[COL_WEEK] == s
-    idx_semana = [ids.index(c) for c in chunks.loc[mask, "chunk_id"]]
-    emb_promedio = embeddings[idx_semana].mean(axis=0)
-    emb_promedio = emb_promedio / np.linalg.norm(emb_promedio)
-    emb_por_semana.append(emb_promedio)
+    semanas = sorted(chunks[COL_WEEK].unique())
+    emb_por_semana = []
+    for s in semanas:
+        mask = chunks[COL_WEEK] == s
+        idx_semana = [ids.index(c) for c in chunks.loc[mask, "chunk_id"]]
+        emb_promedio = embeddings[idx_semana].mean(axis=0)
+        emb_promedio = emb_promedio / np.linalg.norm(emb_promedio)
+        emb_por_semana.append(emb_promedio)
 
-emb_por_semana = np.array(emb_por_semana)
+    emb_por_semana = np.array(emb_por_semana)
 
-reductor = umap.UMAP(
-    n_components=cfg["analysis"]["umap"]["n_components"],
-    random_state=RANDOM_SEED,
-    n_neighbors=UMAP_N_NEIGHBORS,
-    min_dist=UMAP_MIN_DIST,
-)
-todos = np.vstack([embeddings, emb_por_semana])
-coords_todos = reductor.fit_transform(todos)
-coords_chunks = coords_todos[: len(embeddings)]
-
-fig, axes = plt.subplots(1, 2, figsize=(16, 7))
-fig.suptitle(
-    f"Evolución semántica del programa - Solo participantes - {PROJECT_NAME}",
-    fontsize=13,
-)
-
-ax = axes[0]
-for ciudad, color in CIUDADES_COLORES.items():
-    mask = chunks[COL_CITY] == ciudad
-    idx_ciudad = [ids.index(c) for c in chunks.loc[mask, "chunk_id"]]
-    coords_c = coords_chunks[idx_ciudad]
-    semanas_c = chunks.loc[mask, COL_WEEK].values
-
-    order = np.argsort(semanas_c)
-    x, y = coords_c[order, 0], coords_c[order, 1]
-    s_ord = semanas_c[order]
-
-    ax.plot(x, y, "-", color=color, alpha=0.5, linewidth=1.2)
-    sc = ax.scatter(
-        x,
-        y,
-        c=s_ord,
-        cmap="plasma",
-        s=80,
-        edgecolors=color,
-        linewidths=1.5,
-        zorder=3,
-        vmin=1,
-        vmax=12,
+    reductor = umap.UMAP(
+        n_components=cfg["analysis"]["umap"]["n_components"],
+        random_state=RANDOM_SEED,
+        n_neighbors=UMAP_N_NEIGHBORS,
+        min_dist=UMAP_MIN_DIST,
     )
-    ax.annotate(
-        f"{ciudad[:3]} s1",
-        (x[0], y[0]),
-        fontsize=7,
-        xytext=(4, 4),
-        textcoords="offset points",
-        color=color,
-    )
-    ax.annotate(
-        "s12",
-        (x[-1], y[-1]),
-        fontsize=7,
-        xytext=(4, -8),
-        textcoords="offset points",
-        color=color,
+    todos = np.vstack([embeddings, emb_por_semana])
+    coords_todos = reductor.fit_transform(todos)
+    coords_chunks = coords_todos[: len(embeddings)]
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+    fig.suptitle(
+        f"Evolución semántica del programa - Solo participantes - {PROJECT_NAME}",
+        fontsize=13,
     )
 
-plt.colorbar(sc, ax=ax, label="Semana")
-ax.set_title("Trayectoria semántica por ciudad\n(solo participantes)")
-ax.set_xlabel("UMAP dim 1")
-ax.set_ylabel("UMAP dim 2")
+    ax = axes[0]
+    for ciudad, color in CIUDADES_COLORES.items():
+        mask = chunks[COL_CITY] == ciudad
+        idx_ciudad = [ids.index(c) for c in chunks.loc[mask, "chunk_id"]]
+        coords_c = coords_chunks[idx_ciudad]
+        semanas_c = chunks.loc[mask, COL_WEEK].values
 
-legend_elements = [
-    Line2D([0], [0], color=c, linewidth=2, label=ciudad)
-    for ciudad, c in CIUDADES_COLORES.items()
-]
-ax.legend(handles=legend_elements, fontsize=8, loc="upper right")
+        order = np.argsort(semanas_c)
+        x, y = coords_c[order, 0], coords_c[order, 1]
+        s_ord = semanas_c[order]
 
-ax2 = axes[1]
-sim_consecutivas = []
-for i in range(len(emb_por_semana) - 1):
-    s = cosine_similarity([emb_por_semana[i]], [emb_por_semana[i + 1]])[0][0]
-    sim_consecutivas.append(s)
-
-semanas_pares = [f"s{semanas[i]}-s{semanas[i + 1]}" for i in range(len(semanas) - 1)]
-colores_barras = [
-    "#D32F2F" if s < np.mean(sim_consecutivas) else "#1976D2" for s in sim_consecutivas
-]
-
-ax2.bar(
-    range(len(sim_consecutivas)),
-    sim_consecutivas,
-    color=colores_barras,
-    edgecolor="white",
-)
-ax2.axhline(
-    np.mean(sim_consecutivas),
-    color="gray",
-    linestyle="--",
-    linewidth=1,
-    label=f"Media: {np.mean(sim_consecutivas):.3f}",
-)
-ax2.set_xticks(range(len(semanas_pares)))
-ax2.set_xticklabels(semanas_pares, rotation=45, fontsize=8)
-ax2.set_ylabel("Similitud coseno")
-ax2.set_title(
-    "Similitud semántica entre semanas consecutivas\n"
-    "(solo participantes, promedio entre ciudades)"
-)
-ax2.set_ylim(0, 1)
-ax2.legend(fontsize=8)
-
-for i, s in enumerate(sim_consecutivas):
-    if s < np.mean(sim_consecutivas) - np.std(sim_consecutivas):
-        ax2.annotate(
-            "cambio\ntemático",
-            (i, s),
+        ax.plot(x, y, "-", color=color, alpha=0.5, linewidth=1.2)
+        sc = ax.scatter(
+            x,
+            y,
+            c=s_ord,
+            cmap="plasma",
+            s=80,
+            edgecolors=color,
+            linewidths=1.5,
+            zorder=3,
+            vmin=1,
+            vmax=12,
+        )
+        ax.annotate(
+            f"{ciudad[:3]} s1",
+            (x[0], y[0]),
             fontsize=7,
-            ha="center",
-            va="top",
-            xytext=(0, -25),
+            xytext=(4, 4),
             textcoords="offset points",
-            color="#D32F2F",
+            color=color,
+        )
+        ax.annotate(
+            "s12",
+            (x[-1], y[-1]),
+            fontsize=7,
+            xytext=(4, -8),
+            textcoords="offset points",
+            color=color,
         )
 
-plt.tight_layout()
-plt.savefig(OUT_FIGURES / "07b_semantic_evolution_participantes.png", dpi=150)
-plt.close()
-print("  Figura de evolución guardada.")
+    plt.colorbar(sc, ax=ax, label="Semana")
+    ax.set_title("Trayectoria semántica por ciudad\n(solo participantes)")
+    ax.set_xlabel("UMAP dim 1")
+    ax.set_ylabel("UMAP dim 2")
+
+    legend_elements = [
+        Line2D([0], [0], color=c, linewidth=2, label=ciudad)
+        for ciudad, c in CIUDADES_COLORES.items()
+    ]
+    ax.legend(handles=legend_elements, fontsize=8, loc="upper right")
+
+    ax2 = axes[1]
+    sim_consecutivas = []
+    for i in range(len(emb_por_semana) - 1):
+        s = cosine_similarity([emb_por_semana[i]], [emb_por_semana[i + 1]])[0][0]
+        sim_consecutivas.append(s)
+
+    semanas_pares = [
+        f"s{semanas[i]}-s{semanas[i + 1]}" for i in range(len(semanas) - 1)
+    ]
+    colores_barras = [
+        "#D32F2F" if s < np.mean(sim_consecutivas) else "#1976D2"
+        for s in sim_consecutivas
+    ]
+
+    ax2.bar(
+        range(len(sim_consecutivas)),
+        sim_consecutivas,
+        color=colores_barras,
+        edgecolor="white",
+    )
+    ax2.axhline(
+        np.mean(sim_consecutivas),
+        color="gray",
+        linestyle="--",
+        linewidth=1,
+        label=f"Media: {np.mean(sim_consecutivas):.3f}",
+    )
+    ax2.set_xticks(range(len(semanas_pares)))
+    ax2.set_xticklabels(semanas_pares, rotation=45, fontsize=8)
+    ax2.set_ylabel("Similitud coseno")
+    ax2.set_title(
+        "Similitud semántica entre semanas consecutivas\n"
+        "(solo participantes, promedio entre ciudades)"
+    )
+    ax2.set_ylim(0, 1)
+    ax2.legend(fontsize=8)
+
+    for i, s in enumerate(sim_consecutivas):
+        if s < np.mean(sim_consecutivas) - np.std(sim_consecutivas):
+            ax2.annotate(
+                "cambio\ntemático",
+                (i, s),
+                fontsize=7,
+                ha="center",
+                va="top",
+                xytext=(0, -25),
+                textcoords="offset points",
+                color="#D32F2F",
+            )
+
+    plt.tight_layout()
+    plt.savefig(OUT_FIGURES / "07b_semantic_evolution_participantes.png", dpi=150)
+    plt.close()
+    print("  Figura de evolución guardada.")
+else:
+    print("  Evolución semántica omitida (datos transversales).")
 
 # ---------------------------------------------------------------------------
 # 7. Resumen numérico
 # ---------------------------------------------------------------------------
-print("\n=== Similitud promedio entre ciudades (solo participantes) ===")
-for c1 in sorted(CIUDADES_COLORES):
-    for c2 in sorted(CIUDADES_COLORES):
-        if c1 >= c2:
+_primary = CHUNK_GROUPBY[0]
+grupos = sorted(chunks[_primary].unique())
+print(f"\n=== Similitud promedio entre {_primary} (solo participantes) ===")
+for g1 in grupos:
+    for g2 in grupos:
+        if g1 >= g2:
             continue
-        idx1 = [ids.index(c) for c in chunks.loc[chunks[COL_CITY] == c1, "chunk_id"]]
-        idx2 = [ids.index(c) for c in chunks.loc[chunks[COL_CITY] == c2, "chunk_id"]]
+        idx1 = [ids.index(c) for c in chunks.loc[chunks[_primary] == g1, "chunk_id"]]
+        idx2 = [ids.index(c) for c in chunks.loc[chunks[_primary] == g2, "chunk_id"]]
         sim = sim_matrix[np.ix_(idx1, idx2)].mean()
-        print(f"  {c1:12s} vs {c2:12s}: {sim:.3f}")
+        print(f"  {str(g1):20s} vs {str(g2):20s}: {sim:.3f}")
 
-print("\n=== Semanas con mayor cambio temático (solo participantes) ===")
-for i, s in sorted(enumerate(sim_consecutivas), key=lambda x: x[1])[:3]:
-    print(f"  Semana {semanas[i]} -> {semanas[i + 1]}: similitud {s:.3f}")
+if IS_LONGITUDINAL:
+    print("\n=== Semanas con mayor cambio temático (solo participantes) ===")
+    for i, s in sorted(enumerate(sim_consecutivas), key=lambda x: x[1])[:3]:
+        print(f"  Semana {semanas[i]} -> {semanas[i + 1]}: similitud {s:.3f}")
 
 print("\nScript 07b completado.")
