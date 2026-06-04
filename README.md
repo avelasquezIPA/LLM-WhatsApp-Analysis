@@ -1,162 +1,572 @@
-# Análisis LLM de Grupos de WhatsApp - Programa Apapáchar
+# Framework LLM para análisis de grupos de WhatsApp
 
-Repositorio de IPA Colombia para el análisis de mensajes de WhatsApp de la
-intervención del **Programa Apapáchar**, usando Large Language Models (LLMs)
-para summarización temática y análisis de contenido.
+Pipeline de análisis de mensajes de WhatsApp de programas sociales usando
+Large Language Models (LLMs). Diseñado por IPA Colombia para ser replicable:
+un nuevo proyecto solo necesita editar `config.yaml`.
+
+**Implementación de referencia:** [Programa Apapáchar](#el-programa-apapáchar-implementación-de-referencia) — IPA Colombia, 2025–2026.
 
 > [!WARNING]
 > NUNCA SUBAS DATOS A GITHUB.
 >
-> NUNCA USES HERRAMIENTAS DE IA CON DATOS QUE CONTENGAN
-> INFORMACION PERSONALMENTE IDENTIFICABLE (PII) SIN HABERLA REMOVIDO ANTES.
+> NUNCA USES HERRAMIENTAS DE IA CON DATOS QUE CONTENGAN INFORMACIÓN
+> PERSONALMENTE IDENTIFICABLE (PII) SIN HABERLA REMOVIDO ANTES.
+>
+> Ante dudas, consulta las [IPA AI Usage Guidelines](https://ipastorage.box.com/s/mvr67ygvz1y3v8qmgjey67lk7msmyeks)
+> o escribe a support@poverty-action.org.
 
 ---
 
-## El Programa Apapáchar
+## Índice
 
-Apapáchar es un programa de crianza **gratuito e híbrido** (80% digital / 20%
-presencial) co-desarrollado por Fundación Apapacho, ICBF, Equimundo, CINDE e
-IPA Colombia. Está dirigido a cuidadores de niñas y niños de 0 a 5 años en
-familias vulnerables, con énfasis especial en involucrar a padres y cuidadores
-hombres.
+1. [¿Qué hace este pipeline?](#qué-hace-este-pipeline)
+2. [Inicio rápido](#inicio-rápido)
+3. [El Programa Apapáchar (implementación de referencia)](#el-programa-apapáchar-implementación-de-referencia)
+4. [Pipeline completo paso a paso](#pipeline-completo-paso-a-paso)
+5. [Adaptar a un nuevo proyecto](#adaptar-a-un-nuevo-proyecto)
+6. [Estructura del repositorio](#estructura-del-repositorio)
+7. [Configuración del entorno](#configuración-del-entorno)
+8. [Privacidad y clasificación de datos](#privacidad-y-clasificación-de-datos)
+9. [Referencias](#referencias)
+
+---
+
+## ¿Qué hace este pipeline?
+
+Toma los mensajes de WhatsApp de un programa social (ya limpios de PII) y
+produce:
+
+- **Resúmenes temáticos** por grupo y semana (via Claude API)
+- **Mapa de similitud semántica** entre sesiones (UMAP + embeddings)
+- **Clustering temático** para identificar temas recurrentes
+- **Buscador de citas** por código cualitativo (búsqueda vectorial)
+- **Indicadores de interacción participante-participante** (cadenas de diálogo,
+  latencia de respuesta, retención, escalabilidad)
+- **Archivos Excel de codificación** listos para análisis cualitativo manual
+
+El pipeline combina **Stata** (limpieza y remoción de PII) con **Python**
+(embeddings, clustering, summarización via Claude API).
+
+---
+
+## Inicio rápido
+
+```bash
+# 1. Clonar el repositorio
+git clone <url-del-repo>
+cd LLM-Apapachar
+
+# 2. Instalar dependencias Python
+uv sync
+
+# 3. Editar config.yaml con los valores de tu proyecto
+#    (ver sección "Adaptar a un nuevo proyecto")
+
+# 4. Configurar credenciales en .env
+#    ANTHROPIC_API_KEY=tu_api_key
+#    STATA_CMD='C:\Program Files\Stata18\StataSE-64.exe'
+#    STATA_EDITION='se'
+
+# 5. Correr el pipeline completo
+just stata-script 01_remove_pii        # Stata: limpiar PII
+uv run python scripts/python_scripts/02_preprocessing.py
+uv run python scripts/python_scripts/03_chunking.py
+uv run python scripts/python_scripts/04_embeddings.py
+uv run python scripts/python_scripts/05a_clustering.py
+uv run python scripts/python_scripts/06_summarization.py
+# ... (ver pipeline completo más abajo)
+```
+
+---
+
+## El Programa Apapáchar (implementación de referencia)
+
+### Descripción del programa
+
+Apapáchar es un programa de crianza **gratuito e híbrido** (80% digital /
+20% presencial) co-desarrollado por Fundación Apapacho, ICBF, Equimundo,
+CINDE e IPA Colombia. Está dirigido a cuidadores de niñas y niños de 0 a
+5 años en familias vulnerables en Colombia, con énfasis especial en
+involucrar a padres y cuidadores hombres.
 
 **Objetivo central:** prevenir la violencia intrafamiliar contra la niñez y
 promover una crianza amorosa, sensible y corresponsable.
 
-La intervención dura 12 semanas organizadas en 4 niveles. El canal principal
-de comunicación son grupos de WhatsApp donde facilitadores y beneficiarios
+La intervención dura **12 semanas** organizadas en 4 niveles. El canal
+principal son grupos de WhatsApp donde facilitadores y participantes
 intercambian mensajes, reflexiones y actividades semanales.
+
+**Sitios de implementación (2025):** Bogotá, Soacha, Neiva, Valledupar.
 
 Para la documentación completa del programa ver
 [`documentation/PROYECTO.md`](documentation/PROYECTO.md).
 
----
+### Los datos de WhatsApp
 
-## Propósito de este repositorio
+Cada grupo de WhatsApp contiene:
 
-Este repositorio contiene el pipeline de análisis de los mensajes de WhatsApp
-generados durante la intervención. El objetivo es extraer aprendizajes
-cualitativos a escala: temas recurrentes, evolución del programa semana a
-semana, nivel de participación y engagement, y hallazgos relevantes para la
-investigación.
+- Un **facilitador** (guía del programa, empleado de ICBF u organización aliada)
+- Entre 8 y 15 **participantes** (cuidadores/padres de familia)
+- Mensajes durante 12 semanas (texto, imágenes, audio, video)
 
-El pipeline combina **Stata** (limpieza y preprocesamiento) con **Python +
-Claude API** (embeddings, clustering temático y summarización).
+El dataset usado para el análisis contiene únicamente mensajes de **texto**
+de participantes ya anonimizados (sin PII). La estructura del archivo
+`.dta` después de limpiar con Stata es:
 
----
+| Columna | Descripción | Ejemplo |
+| --- | --- | --- |
+| `tipo` | Tipo de mensaje | `"Mensaje en Texto"` |
+| `texto` | Texto del mensaje | `"Hoy practiqué lo de ayer con mi hijo"` |
+| `remitente` | Rol del remitente | `"Participante"` / `"Facilitador"` |
+| `v_grupo` | ID único del grupo | `"GMB3"` |
+| `city_grupo` | Ciudad + grupo | `"BogotaGM3"` |
+| `n_week` | Semana del programa (1–12) | `4` |
+| `datetime` | Fecha y hora del mensaje | `"2025-03-12 10:32:00"` |
+| `tema` | Tema de la sesión | `"Crianza sin violencia"` |
+| `id_f` | ID único del participante | `"GMB3_P01F"` |
+| `sex_grupo` | Género del grupo | `"Mujer"` / `"Hombre"` |
 
-## Paso 1: Limpieza y remoción de PII
+### El análisis de Apapáchar
 
-Antes de cualquier análisis, los mensajes pasan por un proceso de limpieza que
-**elimina todos los mensajes con nombres propios** u otra información
-personalmente identificable.
+El análisis de Apapáchar se divide en dos grandes componentes:
 
-El script `do_files/01_remove_pii.do` implementa 9 patrones de detección en
-Stata cubriendo los casos más comunes en mensajes de WhatsApp en español:
+#### Componente 1: Análisis LLM (scripts 01–09)
 
-| Patrón | Ejemplo |
+Analiza el contenido de los mensajes: calidad lingüística, temas
+recurrentes, evolución semana a semana, y extracción de citas relevantes
+para el análisis cualitativo.
+
+| Script | Descripción |
 | --- | --- |
-| "Mi nombre es..." | `"Mi nombre es Diego Quintero"` |
-| "Me llamo..." | `"me llamo Salomé González"` |
-| "Soy Nombre Apellido" | `"soy Jacobo Gutierrez"` |
-| "Soy Nombre" (una palabra) | `"Hola soy Pepa"` |
+| `01_quality_analysis.py` | Longitud, informalidad, legibilidad (Flesch-Kincaid) |
+| `02_preprocessing.py` | Limpieza mínima, filtro a mensajes de texto |
+| `03_chunking.py` | Agrupa por ciudad × semana |
+| `04_embeddings.py` | Genera vectores semánticos (sentence-transformers, local) |
+| `05a_clustering.py` | Clustering temático KMeans + UMAP |
+| `05b_semantic_search.py` | Búsqueda semántica RAG interactiva |
+| `06_summarization.py` | Resúmenes por chunk y ejecutivo (Claude API) |
+| `07_similarity_map.py` | Mapa de similitud semántica entre chunks |
+| `07b_similarity_map_participantes.py` | Mismo mapa, solo mensajes de participantes |
+| `08_citation_finder.py` | Busca citas por código del árbol cualitativo |
+| `08b_citation_finder_participantes.py` | Mismo buscador, solo participantes |
+| `09_analisis_citas_participantes.py` | Análisis cuantitativo de citas encontradas |
+
+#### Componente 2: Análisis de interacción participante-participante (scripts 10a–10f)
+
+Cuantifica el nivel de interacción genuina entre participantes usando el
+framework de Dedios-Sanguineti et al. (2025), adaptado al contexto de
+crianza de Apapáchar.
+
+| Script | Descripción |
+| --- | --- |
+| `10a_cadenas_interaccion.py` | Detecta cadenas de diálogo P-P; produce `10a_cadenas_sesion.csv` |
+| `10b_piloto_codificacion.py` | Genera Excel de piloto de codificación manual (3 grupos) |
+| `10c_codificacion.py` | Genera 6 Excels de codificación a escala (todos los chunks) |
+| `10d_analisis_interaccion.py` | Analiza resultados de la codificación manual |
+| `10e_escalabilidad.py` | Retención, engagement y escalabilidad por ciudad/género |
+| `10f_monitoreo_inicio_semana.py` | Latencia de primera respuesta como predictor de engagement |
+
+#### Indicadores de interacción (framework Dedios-Sanguineti et al., 2025)
+
+El análisis de codificación manual clasifica cada sesión de interacción
+según 8 indicadores:
+
+| ID | Nivel | Indicador |
+| --- | --- | --- |
+| I1 | Stance-only | Emergencia de posturas |
+| I2 | Interacción básica | Consenso |
+| I3 | Interacción básica | Desacuerdo |
+| I4 | Interacción básica | Cambio de posición |
+| I5 | Interacción compleja | Construcción descriptiva de normalidad |
+| I6 | Interacción compleja | Construcción moral colectiva |
+| I7 | Interacción compleja | Identidades compartidas |
+| I8 | Específico Apapáchar | Adopción de práctica reportada |
+
+Los indicadores I1–I7 son del framework original; I8 es un indicador nuevo
+propuesto para intervenciones de crianza (evidencia directa de
+transferencia al hogar).
+
+---
+
+## Pipeline completo paso a paso
+
+### Paso 0: Remoción de PII (Stata)
+
+**Script:** `scripts/do_files/01_remove_pii.do`
+
+Detecta y elimina mensajes con nombres propios u otra PII antes de
+cualquier análisis. Implementa 9 patrones de expresiones regulares:
+
+| Patrón | Ejemplo eliminado |
+| --- | --- |
+| `"Mi nombre es..."` | `"Mi nombre es Diego Quintero"` |
+| `"Me llamo..."` | `"me llamo Salomé González"` |
+| `"Soy Nombre Apellido"` | `"soy Jacobo Gutierrez"` |
+| `"Soy Nombre"` (una sola palabra) | `"Hola soy Pepa"` |
 | Negritas WhatsApp | `"soy *David Jacobo Polania*"` |
 | Nombre al inicio del mensaje | `"Salome Gonzalez tengo 31 años..."` |
-| "Llamo Nombre Apellido" | `"llamo Andrea Trujillo"` |
+| `"Llamo Nombre Apellido"` | `"llamo Andrea Trujillo"` |
 | Nombres en minúsculas | `"soy mariana"`, `"soy antonia romero"` |
 | Nombres de terceros | `"mi hijo Lucas"`, `"mi bebé pepito"` |
 
-**Rendimiento estimado sobre datos de ejemplo:**
+Después de este paso, los datos se clasifican como **Internal** y pueden
+procesarse con herramientas de IA.
 
-- Sensibilidad (PII detectado): ~90%
-- Falsos positivos: ~0%
+Ver [`documentation/Explicacion-ScriptLimpieza.md`](documentation/Explicacion-ScriptLimpieza.md).
 
-Una vez removidos los mensajes con PII, los datos se clasifican como
-**Internal** según las políticas de IPA, lo lo que permite su procesamiento con
-herramientas de IA como Claude.
+```bash
+just stata-script 01_remove_pii
+```
 
-Para la explicación detallada del script ver
-[`documentation/Explicacion-ScriptLimpieza.md`](documentation/Explicacion-ScriptLimpieza.md).
+**Output:** `data/raw/full_base_WA_clean_NOPII.dta`
 
 ---
 
-## Paso 2: Pipeline LLM (summarización y embeddings)
+### Paso 1: Análisis de calidad
 
-El pipeline de análisis está informado por Ferreira et al. (2025), que evalúa
-exactamente este escenario: mensajes de WhatsApp informales, en idioma
-no-inglés, con datos ruidosos, usando LLMs para generar resúmenes útiles.
+**Script:** `scripts/python_scripts/01_quality_analysis.py`
 
-> Ferreira et al. (2025). *A comprehensive qualitative analysis of patient
-> dialogue summarization using large language models applied to noisy,
-> informal, non-English real-world data.* Scientific Reports, 15, 31660.
+Evalúa longitud, informalidad lingüística y legibilidad (Flesch-Kincaid)
+de los mensajes. Útil para entender el corpus antes de procesarlo.
 
-El pipeline tiene 6 pasos:
+```bash
+uv run python scripts/python_scripts/01_quality_analysis.py
+```
 
-```text
-Mensajes anonimizados (.dta)
-        |
- [1] Análisis de calidad (tamaño, informalidad)
-        |
- [2] Limpieza y preprocesamiento
-        |
- [3] Chunking (agrupación por semana/ciudad)
-        |
- [4] Embeddings (sentence-transformers, multilingüe)
-        |
-     --------
-    |        |
- [5a]      [5b]
-Clustering  Búsqueda
-temático    semántica (RAG)
-    |        |
-     --------
-        |
- [6] Summarización con Claude API
-        |
- Resúmenes estructurados por grupo/sesión
-```text
+**Outputs:** `outputs/tables/01_quality_summary.csv`,
+`outputs/figures/01_distribucion_longitud.png`,
+`outputs/figures/01_mensajes_por_semana.png`,
+`outputs/figures/01_flesch_kincaid.png`
 
-### Herramientas por paso
+---
 
-| Paso | Herramienta |
-| --- | --- |
-| Limpieza y preprocesamiento | Stata (`01_remove_pii.do`) |
-| Análisis de calidad | Python + pandas |
-| Chunking | Python + pandas |
-| Embeddings | `sentence-transformers` (gratuito, local) |
-| Vector store | `chromadb` (gratuito, local) |
-| Clustering | `scikit-learn` (KMeans) + `umap-learn` |
-| Summarización / RAG | Claude API (Anthropic) |
+### Paso 2: Preprocesamiento
 
-Los pasos de embeddings, clustering y summarización **no pueden hacerse en
-Stata** ya que requieren librerías de machine learning inexistentes en ese
-entorno.
+**Script:** `scripts/python_scripts/02_preprocessing.py`
 
-Para la documentación completa del pipeline ver
-[`documentation/llm-whatsapp-pipeline.md`](documentation/llm-whatsapp-pipeline.md).
+Limpieza mínima (espacios múltiples, filtro a mensajes de texto) y
+guardado en formato Parquet para eficiencia.
+
+```bash
+uv run python scripts/python_scripts/02_preprocessing.py
+```
+
+**Input:** `data/raw/full_base_WA_clean_NOPII.dta`
+**Output:** `data/clean/mensajes_preprocesados.parquet`
+
+---
+
+### Paso 3: Chunking
+
+**Script:** `scripts/python_scripts/03_chunking.py`
+
+Agrupa todos los mensajes de una ciudad en una semana en un solo bloque
+de texto (chunk). Estrategia: `ciudad × semana` = 1 chunk.
+
+```bash
+uv run python scripts/python_scripts/03_chunking.py
+```
+
+**Input:** `data/clean/mensajes_preprocesados.parquet`
+**Output:** `data/clean/chunks.parquet`
+
+---
+
+### Paso 4: Embeddings
+
+**Script:** `scripts/python_scripts/04_embeddings.py`
+
+Genera vectores semánticos de cada chunk usando
+`paraphrase-multilingual-mpnet-base-v2` (sentence-transformers). El
+modelo corre 100% local (~400 MB, descarga única), sin enviar datos a
+servidores externos. Los vectores se almacenan en ChromaDB (base
+vectorial local en disco).
+
+```bash
+uv run python scripts/python_scripts/04_embeddings.py
+```
+
+**Input:** `data/clean/chunks.parquet`
+**Output:** `data/vectorstore/` (ChromaDB persistente)
+
+---
+
+### Paso 5a: Clustering temático
+
+**Script:** `scripts/python_scripts/05a_clustering.py`
+
+Aplica KMeans sobre los embeddings y reduce dimensiones con UMAP para
+visualizar cómo se agrupan temáticamente las sesiones.
+
+```bash
+uv run python scripts/python_scripts/05a_clustering.py
+```
+
+**Output:** `outputs/figures/05a_clusters_umap.png`,
+`outputs/tables/05a_cluster_labels.csv`
+
+---
+
+### Paso 5b: Búsqueda semántica (RAG)
+
+**Script:** `scripts/python_scripts/05b_semantic_search.py`
+
+Interfaz interactiva para hacer preguntas sobre el corpus y obtener
+respuestas con citas, usando Retrieval-Augmented Generation con Claude.
+
+```bash
+uv run python scripts/python_scripts/05b_semantic_search.py
+```
+
+---
+
+### Paso 6: Summarización con Claude API
+
+**Script:** `scripts/python_scripts/06_summarization.py`
+
+Genera resúmenes estructurados de los mensajes de WhatsApp en tres
+modalidades:
+
+- **6a**: Un resumen por chunk (ciudad × semana) — costo estimado ~$1.10 USD
+- **6c**: Resumen ejecutivo del programa completo (map-reduce) — ~$0.05 USD
+
+Requiere `ANTHROPIC_API_KEY` en `.env`.
+
+```bash
+uv run python scripts/python_scripts/06_summarization.py
+```
+
+**Output:** `outputs/tables/06a_resumenes_chunks.csv`,
+`outputs/tables/06c_resumen_ejecutivo.txt`
+
+---
+
+### Paso 7: Mapas de similitud semántica
+
+**Scripts:** `07_similarity_map.py`, `07b_similarity_map_participantes.py`
+
+Visualiza la evolución semántica del programa proyectando todos los
+chunks en un plano 2D con UMAP. El script `07b` usa solo mensajes de
+participantes.
+
+```bash
+uv run python scripts/python_scripts/07_similarity_map.py
+uv run python scripts/python_scripts/07b_similarity_map_participantes.py
+```
+
+**Output:** `outputs/figures/07_similarity_map.png`,
+`outputs/figures/07b_similarity_map_participantes.png`
+
+---
+
+### Paso 8: Buscador de citas por código cualitativo
+
+**Scripts:** `08_citation_finder.py`, `08b_citation_finder_participantes.py`
+
+Para cada código del árbol de análisis cualitativo (`config.yaml` →
+`analysis.citation_search.relevant_families`), encuentra los mensajes
+más semánticamente relevantes como citas potenciales. El script `08b`
+busca solo entre mensajes de participantes.
+
+```bash
+uv run python scripts/python_scripts/08_citation_finder.py
+uv run python scripts/python_scripts/08b_citation_finder_participantes.py
+```
+
+**Output:** `outputs/tables/08_citas_por_codigo.xlsx`,
+`outputs/tables/08b_citas_por_codigo_participantes.xlsx`
+
+---
+
+### Paso 9: Análisis de citas
+
+**Script:** `scripts/python_scripts/09_analisis_citas_participantes.py`
+
+Análisis cuantitativo de las citas encontradas por código y familia
+temática.
+
+```bash
+uv run python scripts/python_scripts/09_analisis_citas_participantes.py
+```
+
+---
+
+### Paso 10a: Detección de cadenas de interacción P-P
+
+**Script:** `scripts/python_scripts/10a_cadenas_interaccion.py`
+
+Detecta cadenas de diálogo genuino entre participantes. Una cadena
+(sesión P-P) se define como una secuencia de mensajes donde al menos
+2 participantes distintos interactúan dentro de una ventana de 60
+minutos. Produce el dataset base para los pasos 10b–10f.
+
+```bash
+uv run python scripts/python_scripts/10a_cadenas_interaccion.py
+```
+
+**Output:** `outputs/tables/10a_cadenas_sesion.csv`,
+`outputs/tables/10a_resumen_grupos.csv`,
+`outputs/figures/10a_*.png`
+
+---
+
+### Pasos 10b–10c: Codificación manual
+
+**Scripts:** `10b_piloto_codificacion.py`, `10c_codificacion.py`
+
+Generan archivos Excel estructurados para que el equipo de investigación
+codifique manualmente las interacciones según el framework de
+Dedios-Sanguineti et al. (2025). El paso 10b genera el Excel de piloto
+(3 grupos representativos); el paso 10c genera los 6 chunks completos
+(48 grupos × 2 semanas cada uno).
+
+Cada Excel tiene tres tipos de hojas:
+
+- **Guia_indicadores**: descripción y ejemplos de cada indicador I1–I8
+- **GRUPO_sN**: mensajes del grupo con color-coding de sesiones P-P
+- **Chunk_N**: plantilla de codificación con ITs pre-llenadas
+
+```bash
+uv run python scripts/python_scripts/10b_piloto_codificacion.py
+uv run python scripts/python_scripts/10c_codificacion.py
+```
+
+**Output:** `outputs/tables/10b_piloto.xlsx`,
+`outputs/tables/10c_chunk1.xlsx` … `10c_chunk6.xlsx`
+
+---
+
+### Pasos 10d–10f: Análisis de interacción
+
+```bash
+uv run python scripts/python_scripts/10d_analisis_interaccion.py  # resultados de codificación
+uv run python scripts/python_scripts/10e_escalabilidad.py         # retención y engagement
+uv run python scripts/python_scripts/10f_monitoreo_inicio_semana.py  # latencia vs. engagement
+```
+
+- **10d**: Distribución de tipos de interacción, comparación por ciudad y género
+- **10e**: Retención de participantes semana a semana, engagement por grupo,
+  escalabilidad del programa
+- **10f**: Analiza si la rapidez de la primera respuesta al inicio de cada
+  semana predice el nivel de interacción de esa semana
+
+---
+
+## Adaptar a un nuevo proyecto
+
+Todo lo específico del proyecto está en **`config.yaml`** en la raíz.
+Un nuevo proyecto solo necesita editar este archivo; ningún script
+necesita cambios.
+
+Las secciones marcadas con `[ADAPTAR]` son las que debes revisar:
+
+```yaml
+# =============================================================================
+# PROYECTO [ADAPTAR]
+# =============================================================================
+project:
+  name: "Nombre de tu programa"
+  duration_weeks: 12          # Duración en semanas
+  cities:                     # Lista de ciudades/sitios (igual que en los datos)
+    - "Ciudad1"
+    - "Ciudad2"
+
+# =============================================================================
+# DATOS [ADAPTAR]
+# =============================================================================
+data:
+  input:
+    raw_stata_file: "data/raw/tu_base.dta"
+    coding_tree_file: "documentation/tu_arbol_de_codigos.xlsx"
+
+  columns:                    # Nombres de columnas en tu .dta
+    message_type: "tipo"
+    message_text: "texto"
+    sender: "remitente"
+    city_group: "city_grupo"
+    week_number: "n_week"
+    group_id: "v_grupo"
+    datetime: "datetime"
+    theme: "tema"
+    participant_id: "id_f"
+    gender_group: "sex_grupo"
+
+  values:                     # Valores que distinguen participantes de facilitadores
+    text_message_type: "Mensaje en Texto"
+    participant_sender: "Participante"
+    facilitator_sender: "Facilitador"
+
+# =============================================================================
+# MODELOS
+# =============================================================================
+models:
+  claude_model: "claude-sonnet-4-6"   # Modelo Claude a usar
+
+# =============================================================================
+# PROMPTS [ADAPTAR]
+# =============================================================================
+prompts:
+  chunk_summary: |
+    Eres un asistente del {project_name}...
+    # Los {marcadores} se reemplazan automáticamente en tiempo de ejecución
+```
+
+Las secciones **sin** `[ADAPTAR]` (parámetros técnicos de algoritmos,
+ChromaDB, UMAP, clustering) pueden mantenerse como están.
+
+Para adaptar el **framework de indicadores de interacción**, editar la
+sección `coding.indicators` del `config.yaml`. Los scripts de codificación
+(10b, 10c) construyen automáticamente la guía y las plantillas desde allí.
 
 ---
 
 ## Estructura del repositorio
 
 ```text
-├── README.md
+LLM-Apapachar/
+├── config.yaml                      # Configuración central del proyecto [EDITAR]
+├── .env                             # Credenciales (NO subir a GitHub)
+├── pyproject.toml                   # Dependencias Python
+├── Justfile                         # Comandos de desarrollo
+│
+├── scripts/
+│   ├── do_files/
+│   │   └── 01_remove_pii.do         # Remoción de PII (Stata)
+│   └── python_scripts/
+│       ├── config_loader.py         # Singleton que carga config.yaml
+│       ├── 01_quality_analysis.py
+│       ├── 02_preprocessing.py
+│       ├── 03_chunking.py
+│       ├── 04_embeddings.py
+│       ├── 05a_clustering.py
+│       ├── 05b_semantic_search.py
+│       ├── 06_summarization.py
+│       ├── 07_similarity_map.py
+│       ├── 07b_similarity_map_participantes.py
+│       ├── 08_citation_finder.py
+│       ├── 08b_citation_finder_participantes.py
+│       ├── 09_analisis_citas_participantes.py
+│       ├── 10a_cadenas_interaccion.py
+│       ├── 10b_piloto_codificacion.py
+│       ├── 10c_codificacion.py
+│       ├── 10d_analisis_interaccion.py
+│       ├── 10e_escalabilidad.py
+│       └── 10f_monitoreo_inicio_semana.py
+│
 ├── data/
-│   ├── raw/                        # Datos originales (NO subir a GitHub)
-│   ├── clean/                      # Datos limpios (sin PII)
-│   └── final/                      # Datasets listos para análisis
-├── do_files/
-│   └── 01_remove_pii.do            # Detección y remoción de PII
-├── documentation/
-│   ├── PROYECTO.md                 # Descripción completa del Programa Apapáchar
-│   ├── llm-whatsapp-pipeline.md    # Diseño del pipeline LLM
-│   ├── Explicacion-ScriptLimpieza.md # Documentación del script de PII
-│   └── s41598-025-13560-9.md       # Paper de referencia (Ferreira et al., 2025)
-├── src/                            # Scripts Python del pipeline LLM
-└── outputs/
-    ├── figures/
-    └── tables/
-```text
+│   ├── raw/                         # Datos originales — NUNCA subir a GitHub
+│   ├── clean/                       # Datos preprocesados (sin PII)
+│   └── vectorstore/                 # ChromaDB (embeddings en disco)
+│
+├── outputs/
+│   ├── figures/                     # Gráficas generadas
+│   └── tables/                      # Tablas y CSVs generados
+│
+└── documentation/
+    ├── PROYECTO.md                  # Descripción completa del Programa Apapáchar
+    ├── llm-whatsapp-pipeline.md     # Diseño del pipeline
+    └── Explicacion-ScriptLimpieza.md
+```
 
 ---
 
@@ -164,49 +574,77 @@ Para la documentación completa del pipeline ver
 
 ### Prerrequisitos
 
-- Stata 17+ (para el script de limpieza de PII)
-- Python 3.12+ con `uv` (para el pipeline LLM)
+- **Stata 17+** (para el script de remoción de PII)
+- **Python 3.12+** con `uv` instalado
+- **API key de Anthropic** (solo para los pasos 5b y 6)
 
-### Setup
-
-```bash
-# Instalar dependencias Python
-uv add pandas sentence-transformers chromadb scikit-learn umap-learn matplotlib anthropic
-
-# Configurar API key de Claude en .env
-ANTHROPIC_API_KEY=tu_api_key_aqui
-
-# Configurar ruta de Stata en .env
-STATA_CMD='C:\Program Files\Stata18\StataSE-64.exe'
-STATA_EDITION='se'
-```text
-
-### Correr el script de limpieza de PII
+### Instalación
 
 ```bash
-just stata-script 01_remove_pii
-```text
+# Instalar uv (si no está instalado)
+pip install uv
+
+# Crear entorno virtual e instalar dependencias
+uv sync
+
+# Activar el entorno (opcional — uv run lo hace automáticamente)
+.venv/Scripts/activate.ps1   # Windows PowerShell
+source .venv/bin/activate    # macOS/Linux
+```
+
+### Variables de entorno
+
+Crear un archivo `.env` en la raíz del proyecto:
+
+```bash
+# Requerido para los pasos 5b y 6
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Requerido para correr scripts de Stata desde Python
+STATA_CMD=C:\Program Files\Stata18\StataSE-64.exe
+STATA_EDITION=se
+```
+
+### Comandos útiles
+
+```bash
+just help              # Lista todos los comandos disponibles
+just stata-script 01_remove_pii  # Correr un script Stata específico
+just lint-py           # Verificar calidad del código Python
+just fmt-python        # Formatear código Python con ruff
+```
 
 ---
 
 ## Privacidad y clasificación de datos
 
-- Los datos **crudos** (con nombres de participantes) son **Confidential** y
-  nunca deben subirse a GitHub ni procesarse con IA.
-- Los datos **anonimizados** (después de correr `01_remove_pii.do`) se
-  clasifican como **Internal** y pueden procesarse con Claude API.
-- Ante dudas sobre clasificación de datos, consulta las
-  [IPA AI Usage Guidelines](https://ipastorage.box.com/s/mvr67ygvz1y3v8qmgjey67lk7msmyeks)
-  o escribe a support@poverty-action.org.
+Este pipeline maneja datos en distintas etapas de sensibilidad:
+
+| Etapa | Clasificación IPA | Puede subir a GitHub | Puede usar con IA |
+| --- | --- | --- | --- |
+| Mensajes con nombres de participantes | **Confidential** | No | No |
+| Mensajes anonimizados (post PII) | **Internal** | No | Sí |
+| Tablas de resumen agregadas | **Internal** | No | Sí |
+| Código y configuración | **Internal** | Sí | Sí |
+
+El archivo `data/raw/full_base_WA_clean_NOPII.dta` ya no contiene PII
+pero sigue siendo **Internal** y no debe subirse a GitHub. Asegúrate de
+que `data/` esté en `.gitignore`.
+
+Ante dudas, consulta las [IPA AI Usage Guidelines](https://ipastorage.box.com/s/mvr67ygvz1y3v8qmgjey67lk7msmyeks)
+o escribe a support@poverty-action.org.
 
 ---
 
 ## Referencias
 
+- Dedios-Sanguineti, M. C. et al. (2025). Framework for coding
+  peer-to-peer interaction in WhatsApp groups of social programs.
+  *(referencia interna IPA Colombia)*
 - Ferreira, A. A. et al. (2025). A comprehensive qualitative analysis of
-  patient dialogue summarization using large language models applied to noisy,
-  informal, non-English real-world data. *Scientific Reports*, 15, 31660.
-  https://doi.org/10.1038/s41598-025-13560-9
+  patient dialogue summarization using large language models applied to
+  noisy, informal, non-English real-world data. *Scientific Reports*,
+  15, 31660. <https://doi.org/10.1038/s41598-025-13560-9>
 - Cuartas, J. et al. (2022). The Apapacho Violence Prevention Parenting
-  Program: Conceptual Foundations and Pathways to Scale. *Int J Environ Res
-  Public Health*, 19(14), 8582.
+  Program: Conceptual Foundations and Pathways to Scale. *Int J Environ
+  Res Public Health*, 19(14), 8582.
