@@ -167,7 +167,7 @@ El overlap de 10-20% evita que una conversación que cruza el límite del chunk 
 Un embedding convierte texto en un vector numérico que captura su significado semántico.
 Textos con significado similar tienen vectores similares (alta similitud coseno).
 
-```
+```text
 "Hoy aprendimos sobre límites con amor"  →  [0.23, -0.41, 0.87, ...]
 "La sesión de crianza positiva fue útil" →  [0.21, -0.38, 0.85, ...]  <- similar
 "El precio del transporte subió"         →  [-0.67, 0.12, -0.34, ...] <- diferente
@@ -187,6 +187,7 @@ embeddings = modelo.encode(chunks['texto_chunk'].tolist(), show_progress_bar=Tru
 ```
 
 **Por qué este modelo:**
+
 - Gratuito, corre localmente (sin enviar datos a servidores externos)
 - Entrenado en 50+ idiomas incluyendo español
 - Buen balance entre calidad y velocidad
@@ -261,7 +262,7 @@ plt.savefig('outputs/figures/clusters_mensajes.png', dpi=150)
 Una vez que tienes los clusters, envía una muestra de cada uno a Claude para que
 identifique el tema:
 
-```
+```text
 Prompt: "Aquí hay 10 mensajes del mismo grupo temático de un programa de crianza en
 Colombia. ¿Cuál es el tema principal que los une? Responde en máximo 5 palabras.
 
@@ -389,7 +390,7 @@ El paper propone cuatro criterios para evaluar la calidad de los resúmenes.
 Se pueden aplicar manualmente o usando Claude como evaluador:
 
 | Criterio | Pregunta clave | Escala |
-|---|---|---|
+| --- | --- | --- |
 | **Cobertura** | ¿El resumen cubre todos los aspectos importantes? | 1-5 |
 | **Relevancia** | ¿Todo lo que dice el resumen es relevante? | 1-5 |
 | **Redundancia** | ¿El resumen evita repetir información? | 1-5 |
@@ -400,7 +401,7 @@ Se pueden aplicar manualmente o usando Claude como evaluador:
 ## Stack tecnológico completo
 
 | Componente | Herramienta | Costo | Instalación |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Manejo de datos | `pandas` | Gratuito | `uv add pandas` |
 | Embeddings | `sentence-transformers` | Gratuito | `uv add sentence-transformers` |
 | Vector store | `chromadb` | Gratuito | `uv add chromadb` |
@@ -418,7 +419,7 @@ uv add pandas sentence-transformers chromadb scikit-learn umap-learn matplotlib 
 
 En el archivo `.env` del proyecto:
 
-```
+```bash
 ANTHROPIC_API_KEY=tu_api_key_aqui
 ```
 
@@ -426,7 +427,7 @@ ANTHROPIC_API_KEY=tu_api_key_aqui
 
 ## Orden de ejecución recomendado
 
-```
+```text
 1. Cargar y explorar el dataset de mensajes (pandas)
 2. Análisis de calidad (tamaño, informalidad)        <- PASO 1
 3. Limpieza básica del texto                         <- PASO 2

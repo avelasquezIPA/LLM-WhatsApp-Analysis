@@ -207,13 +207,17 @@ marimo/_lsp/
 __marimo__/
 
 # Generated Data Files
-# data/*/*
-# data/clean/
-# data/final/*.dta
 data/temp/
 data/processed/
 data/clean/
 data/vectorstore/
+
+# Raw data — real project data must never reach main
+# Only demo/fake data files are allowed (DatosEjemplos-FalsePII.*)
+data/raw/*.dta
+data/raw/*.parquet
+!data/raw/DatosEjemplos-FalsePII.dta
+!data/raw/DatosEjemplos-FalsePII.xlsx
 
 # Analysis Outputs
 outputs/**/*.pdf

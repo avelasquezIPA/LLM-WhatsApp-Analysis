@@ -338,8 +338,6 @@ The study protocol was approved by the Ethics Committee at Universidad de los An
 
 ## Notes
 
-[^1]: The research team has translated all the extracts in this article from Spanish to facilitate reading. Spelling errors were corrected in this translation. However, we have tried to maintain the original grammar, punctuation, and word choice as faithfully as possible.
-
 [^2]: In Colombia, the term "veneco" is used with a negative connotation to refer to Venezuelan migrants. The term has been in use since the late 1970s but gained popularity with the arrival of Venezuelan migrants during the crisis in 2015.
 
 ---

@@ -187,6 +187,7 @@ embeddings = modelo.encode(chunks['texto_chunk'].tolist(), show_progress_bar=Tru
 ```
 
 **Por qué este modelo:**
+
 - Gratuito, corre localmente (sin enviar datos a servidores externos)
 - Entrenado en 50+ idiomas incluyendo español
 - Buen balance entre calidad y velocidad

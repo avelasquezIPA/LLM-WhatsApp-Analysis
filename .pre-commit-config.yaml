@@ -24,10 +24,13 @@ repos:
         exclude: >-
           (?x)^(
             README\.md|
+            \.claude/.*|
             documentation/Programa/PROYECTO\.md|
             documentation/Process/Explicacion-ScriptLimpieza\.md|
             documentation/Papers/s41598-025-13560-9\.md|
+            documentation/s41598-025-13560-9\.md|
             documentation/Process/llm-whatsapp-pipeline\.md|
+            documentation/llm-whatsapp-pipeline\.md|
             documentation/Process/llm-anto-process\.md|
             documentation/Process/LLM-ResultsSummary\.md|
             documentation/Process/aplicacion-dedios-apapachar\.md|
@@ -42,9 +45,11 @@ repos:
       - id: markdownlint-cli2
         exclude: >-
           (?x)^(
-            \.claude/|
+            \.claude/.*|
             documentation/Papers/s41598-025-13560-9\.md|
+            documentation/s41598-025-13560-9\.md|
             documentation/Process/llm-whatsapp-pipeline\.md|
+            documentation/llm-whatsapp-pipeline\.md|
             documentation/Papers/dedios-sanguineti-et-al-2025\.md
           )$
 
