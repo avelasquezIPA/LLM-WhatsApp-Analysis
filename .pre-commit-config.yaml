@@ -34,6 +34,7 @@ repos:
             documentation/Process/llm-anto-process\.md|
             documentation/Process/LLM-ResultsSummary\.md|
             documentation/Process/aplicacion-dedios-apapachar\.md|
+            documentation/Programa/aplicacion-dedios-apapachar\.md|
             documentation/Papers/dedios-sanguineti-et-al-2025\.md|
             scripts/do_files/.*\.do|
             scripts/python_scripts/.*\.py
