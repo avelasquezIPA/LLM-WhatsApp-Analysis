@@ -17,6 +17,38 @@ un nuevo proyecto solo necesita editar `config.yaml`.
 
 ---
 
+## ¿Para quién funciona este pipeline?
+
+Este framework es útil si tu proyecto cumple con estas condiciones:
+
+### Tipo de intervención
+
+- Tu programa implementó grupos de WhatsApp como canal de comunicación
+  con participantes (intervenciones digitales, híbridas o presenciales
+  con seguimiento digital)
+- O tienes grupos focales digitales conducidos por WhatsApp
+
+### Tipo de datos
+
+- Tienes los mensajes exportados de esos grupos (en cualquier formato
+  que puedas limpiar con Stata: `.dta`, `.csv`, `.xlsx`)
+- Los datos pueden ser **longitudinales** (grupos con múltiples sesiones
+  o semanas) o de **corte transversal** (una sola ronda de grupos)
+- Los mensajes ya fueron o pueden ser anonimizados antes del análisis
+
+### Contexto
+
+- El programa tiene un componente de facilitación: hay alguien que guía
+  los grupos y participantes que responden e interactúan
+- Tienes interés en entender no solo *qué* se dijo, sino *cómo*
+  interactuaron los participantes entre sí
+
+Si tu proyecto encaja en este perfil, el único paso de configuración
+es editar `config.yaml` con los nombres de columnas y parámetros de tu
+dataset. No se necesita modificar ningún script Python.
+
+---
+
 ## Índice
 
 1. [¿Qué hace este pipeline?](#qué-hace-este-pipeline)
