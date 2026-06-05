@@ -6,12 +6,15 @@ un nuevo proyecto solo necesita editar `config.yaml`.
 
 **Implementación de referencia:** [Programa Apapáchar](#el-programa-apapáchar-implementación-de-referencia) — IPA Colombia, 2025–2026.
 
+**Para usar este pipeline con tu proyecto:** lee primero
+[la guía de adaptación de `config.yaml`](documentation/Process/modificacion_config.md)
+— explica campo por campo qué cambiar para que el pipeline funcione con
+tus datos sin tocar ningún script Python.
+
 > [!WARNING]
-> NUNCA SUBAS DATOS A GITHUB.
->
-> NUNCA USES HERRAMIENTAS DE IA CON DATOS QUE CONTENGAN INFORMACIÓN
-> PERSONALMENTE IDENTIFICABLE (PII) SIN HABERLA REMOVIDO ANTES.
->
+> NUNCA SUBAS DATOS A GITHUB. NUNCA USES HERRAMIENTAS DE IA CON DATOS
+> QUE CONTENGAN INFORMACIÓN PERSONALMENTE IDENTIFICABLE (PII) SIN
+> HABERLA REMOVIDO ANTES.
 > Ante dudas, consulta las [IPA AI Usage Guidelines](https://ipastorage.box.com/s/mvr67ygvz1y3v8qmgjey67lk7msmyeks)
 > o escribe a support@poverty-action.org.
 
