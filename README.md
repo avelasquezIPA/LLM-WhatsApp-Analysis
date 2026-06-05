@@ -38,18 +38,18 @@ un nuevo proyecto solo necesita editar `config.yaml`.
 Toma los mensajes de WhatsApp de un programa social (ya limpios de PII) y
 produce:
 
-- **Mapa de similitud semántica** entre sesiones (UMAP + embeddings)
-- **Clustering temático** para identificar temas recurrentes
-- **Buscador de citas** por código cualitativo (búsqueda vectorial)
-- **Búsqueda semántica (RAG)** para responder preguntas de investigación (via Claude)
+- **Clustering temático** para identificar temas recurrentes (KMeans + UMAP)
+- **Mapa de similitud semántica** entre sesiones para ver la evolución temática
+- **Buscador de citas** por código cualitativo (búsqueda vectorial local)
 - **Indicadores de interacción participante-participante** (cadenas de diálogo,
   latencia de respuesta, retención, escalabilidad)
-- **Codificación con framework DEDIOS** (Dedios-Sanguineti et al., 2025): niveles
-  de interacción entre participantes vía Claude API
-- **Archivos Excel de codificación** listos para análisis cualitativo manual
+- **Excels estructurados para codificación DEDIOS** (Dedios-Sanguineti et al., 2025):
+  el paso 10b selecciona los grupos más representativos; la codificación se realiza
+  directamente con Claude Code sin necesidad de API key
 
-El pipeline combina **Stata** (limpieza y remoción de PII) con **Python**
-(embeddings, clustering, búsqueda semántica y codificación via Claude API).
+El pipeline es **100% local** — embeddings con sentence-transformers, vectorstore con
+ChromaDB. Combina **Stata** (limpieza y remoción de PII) con **Python** (análisis). La
+codificación cualitativa con Claude se realiza en conversación directa con Claude Code.
 
 ---
 
@@ -61,7 +61,7 @@ Antes de correr cualquier paso:
 | --- | --- | --- |
 | Python 3.12+ | Todo el pipeline Python | [python.org](https://www.python.org/downloads/) |
 | `uv` | Gestor de entorno y dependencias | `pip install uv` |
-| Acceso a Claude API | Pasos 05b y 10c (RAG y codificación) | Incluido en el plan Claude Enterprise de tu organización |
+| Claude Code | Codificación DEDIOS (conversacional) | Plan Claude Enterprise de tu organización |
 | Stata 17+ | Solo paso 0 (remoción de PII) | Licencia institucional |
 
 Los pasos 1–10f son 100% Python. Stata **solo es necesario** si tu dataset
@@ -130,7 +130,7 @@ git clone <url-del-repo>
 cd LLM-Apapachar
 uv sync
 
-# 2. Configurar credenciales de Stata (el acceso a Claude API es vía plan enterprise)
+# 2. Configurar credenciales de Stata
 echo "STATA_CMD=C:\Program Files\Stata18\StataSE-64.exe" > .env
 echo "STATA_EDITION=se" >> .env
 
@@ -148,7 +148,12 @@ uv run python 05a_clustering.py      # clustering temático (KMeans + UMAP)
 uv run python 06_similarity_map.py   # mapa de similitud semántica
 uv run python 08b_citation_finder_participantes.py   # buscador de citas por código cualitativo
 uv run python 10a_cadenas_interaccion.py             # cadenas de interacción P-P
-uv run python 10c_codificacion.py                    # codificación framework DEDIOS (requiere Claude API)
+
+# 6. Codificación DEDIOS con Claude Code (sin API key)
+#    - Dataset pequeño: compartir los chunks directamente con Claude Code
+#    - Dataset grande: ejecutar 10b para seleccionar grupos representativos,
+#      luego codificar en conversación con Claude Code
+uv run python 10b_piloto_codificacion.py             # selecciona grupos más representativos → Excel
 ```
 
 ---
@@ -380,17 +385,6 @@ uv run python scripts/python_scripts/05a_clustering.py
 
 ---
 
-### Paso 5b: Búsqueda semántica (RAG)
-
-**Script:** `scripts/python_scripts/05b_semantic_search.py`
-
-Interfaz interactiva para hacer preguntas sobre el corpus y obtener
-respuestas con citas, usando Retrieval-Augmented Generation con Claude.
-
-```bash
-uv run python scripts/python_scripts/05b_semantic_search.py
-```
-
 ---
 
 ### Paso 6: Mapas de similitud semántica
@@ -462,29 +456,33 @@ uv run python scripts/python_scripts/10a_cadenas_interaccion.py
 
 ---
 
-### Pasos 10b–10c: Codificación manual
+### Paso 10b: Codificación DEDIOS con Claude Code
 
-**Scripts:** `10b_piloto_codificacion.py`, `10c_codificacion.py`
+**Script:** `10b_piloto_codificacion.py`
 
-Generan archivos Excel estructurados para que el equipo de investigación
-codifique manualmente las interacciones según el framework de
-Dedios-Sanguineti et al. (2025). El paso 10b genera el Excel de piloto
-(3 grupos representativos); el paso 10c genera los 6 chunks completos
-(48 grupos × 2 semanas cada uno).
+Genera un Excel estructurado con los grupos más representativos del dataset
+para codificar las interacciones según el framework de Dedios-Sanguineti
+et al. (2025). La codificación se realiza **directamente con Claude Code**
+— sin necesidad de API key.
 
-Cada Excel tiene tres tipos de hojas:
+**Flujo recomendado:**
 
-- **Guia_indicadores**: descripción y ejemplos de cada indicador I1–I8
-- **GRUPO_sN**: mensajes del grupo con color-coding de sesiones P-P
-- **Chunk_N**: plantilla de codificación con ITs pre-llenadas
+| Tamaño del dataset | Flujo |
+| --- | --- |
+| Pequeño (pocos grupos) | Compartir los mensajes directamente con Claude Code y codificar en conversación |
+| Grande (muchos grupos / semanas) | Correr `10b` para seleccionar los grupos más representativos → compartir el Excel con Claude Code |
 
 ```bash
 uv run python scripts/python_scripts/10b_piloto_codificacion.py
-uv run python scripts/python_scripts/10c_codificacion.py
 ```
 
-**Output:** `outputs/tables/10b_piloto.xlsx`,
-`outputs/tables/10c_chunk1.xlsx` … `10c_chunk6.xlsx`
+Cada Excel contiene:
+
+- **Guia_indicadores**: descripción y ejemplos de cada indicador I1–I8
+- **GRUPO_sN**: mensajes del grupo con color-coding de sesiones P-P
+- **Plantilla de codificación**: lista de interacciones para asignar indicadores
+
+**Output:** `outputs/tables/10b_piloto_codificacion.xlsx`
 
 ---
 
@@ -654,7 +652,7 @@ LLM-Apapachar/
 
 - **Stata 17+** (para el script de remoción de PII)
 - **Python 3.12+** con `uv` instalado
-- **Acceso a Claude API** (solo para los pasos 5b, 6 y 10c) — incluido en el plan Claude Enterprise de tu organización
+- **Claude Code** (para la codificación DEDIOS conversacional) — incluido en el plan Claude Enterprise de tu organización
 
 ### Instalación
 
@@ -679,9 +677,8 @@ Crear un archivo `.env` en la raíz del proyecto:
 STATA_CMD=C:\Program Files\Stata18\StataSE-64.exe
 STATA_EDITION=se
 
-# Solo necesario si corres los scripts de Claude (05b, 10c) fuera de Claude Code.
-# Si usas Claude Code (plan enterprise), el acceso a la API ya está disponible.
-# ANTHROPIC_API_KEY=<tu-clave-enterprise>
+# El pipeline Python es 100% local — no requiere API key.
+# La codificación DEDIOS se realiza en conversación directa con Claude Code.
 ```
 
 ### Comandos útiles

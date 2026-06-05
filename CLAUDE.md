@@ -36,7 +36,8 @@ uv run python 04_embeddings.py
 uv run python 05a_clustering.py
 uv run python 06_similarity_map.py
 uv run python 10a_cadenas_interaccion.py
-uv run python 10c_codificacion.py    # requires Claude API (enterprise plan)
+uv run python 10b_piloto_codificacion.py  # selects representative groups for DEDIOS coding
+# Then: share 10b output Excel with Claude Code and code interactively (no API key)
 ```
 
 Or use the `/run-step <N>` skill to run any step with pre-flight validation.
@@ -53,7 +54,7 @@ Or use the `/run-step <N>` skill to run any step with pre-flight validation.
 | 06 | `06_similarity_map.py` | Semantic heatmap + evolution figure |
 | 08b | `08b_citation_finder_participantes.py` | Citations per qualitative code |
 | 10a | `10a_cadenas_interaccion.py` | Participant-participant interaction chains |
-| 10c | `10c_codificacion.py` | DEDIOS framework coding (Claude API) |
+| 10b | `10b_piloto_codificacion.py` | Representative groups Excel → DEDIOS coding with Claude Code |
 
 See [`README.md`](README.md) for the complete pipeline documentation.
 

@@ -34,8 +34,8 @@ Where `<step>` is one of:
 | 08b | `08b_citation_finder_participantes.py` | Same, participants only | Same as 08 |
 | 09 | `09_analisis_citas_participantes.py` | Analyze citations by gender/city | `08b_citas_*.xlsx` |
 | 10a | `10a_cadenas_interaccion.py` | Interaction chains analysis | `mensajes_preprocesados.parquet` |
-| 10b | `10b_piloto_codificacion.py` | Pilot coding with Claude | `mensajes_preprocesados.parquet`, Claude API |
-| 10c | `10c_codificacion.py` | Full coding framework with Claude | `chunks.parquet`, Claude API |
+| 10b | `10b_piloto_codificacion.py` | Representative groups Excel for DEDIOS coding | `mensajes_preprocesados.parquet`, `10a_cadenas_sesion.csv` |
+| 10c | `10c_codificacion.py` | Full coding Excel (all chunks) | `chunks.parquet`, `10a_cadenas_sesion.csv` |
 | 10d | `10d_analisis_interaccion.py` | Interaction hypothesis analysis | `mensajes_preprocesados.parquet` |
 | 10e | `10e_escalabilidad.py` | Scalability + facilitator engagement | `mensajes_preprocesados.parquet` |
 | 10f | `10f_monitoreo_inicio_semana.py` | Weekly monitoring report | `mensajes_preprocesados.parquet` |
@@ -60,8 +60,8 @@ uv run python -c "from scripts.python_scripts.config_loader import cfg; print('c
 # 2. Required input files exist
 # (check based on step map above)
 
-# 3. Claude API access (for steps 05b, 10b, 10c) — via enterprise plan
-python -c "import os; from dotenv import load_dotenv; load_dotenv(); assert os.getenv('ANTHROPIC_API_KEY'), 'ANTHROPIC_API_KEY missing — add to .env or use Claude Code'"
+# 3. Claude API access (only for step 05b — optional RAG search)
+#    All other steps including 10b/10c run fully locally without API key.
 ```
 
 If validation fails, report clearly what is missing and how to fix it. Do NOT run the script.
