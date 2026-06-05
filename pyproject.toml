@@ -23,6 +23,16 @@ dependencies = [
     "pymupdf>=1.27.1",
     "python-docx>=1.2.0",
     "docxcompose>=2.0.1",
+    "textstat>=0.7.13",
+    "scipy>=1.17.1",
+    "pyarrow>=24.0.0",
+    "sentence-transformers>=5.5.0",
+    "chromadb>=1.5.9",
+    "umap-learn>=0.5.12",
+    "scikit-learn>=1.8.0",
+    "anthropic>=0.40.0",
+    "python-dotenv>=1.2.2",
+    "openpyxl>=3.1.5",
 ]
 
 
@@ -76,6 +86,8 @@ ignore = [
 # SCons injects these functions at runtime
 "SConstruct" = ["F821"]
 "SConscript" = ["F821"]
+# Scripts de análisis: docstrings descriptivos multilínea, no requieren puntuación estricta
+"scripts/python_scripts/*.py" = ["D400", "D415", "D103", "D101", "D102"]
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -83,5 +95,5 @@ docstring-code-line-length = 88
 
 [tool.codespell]
 builtin = "clear,rare,informal,usage,code,names"
-ignore-words-list = "jupyter,ipa,master,missings,hist,claus"
+ignore-words-list = "jupyter,ipa,master,missings,hist,claus,ser,que,contener,requiere,avance,ws,identificable,caracteres,dimensiones,vectores,pares,dominantes,dominante,momentos,momento,inicial,responde,dof,varios,hace,comando,controles,parentesis,medias,instale,posible,aspectos,algoritmos"
 skip = "uv.lock"

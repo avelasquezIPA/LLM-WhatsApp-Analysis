@@ -1,0 +1,388 @@
+# =============================================================================
+# config.yaml — Configuración central del pipeline LLM de WhatsApp
+# =============================================================================
+# Este archivo centraliza todos los valores específicos del proyecto.
+# Para adaptar el pipeline a un nuevo proyecto, edita las secciones
+# marcadas con [ADAPTAR]. Las secciones sin esa marca son técnicas
+# y pueden mantenerse como están.
+#
+# Proyecto de referencia: Programa Apapáchar — IPA Colombia (2025–2026)
+# =============================================================================
+
+
+# =============================================================================
+# PROYECTO [ADAPTAR]
+# Información identificadora del programa evaluado.
+# =============================================================================
+project:
+  name: "Programa Apapachar"
+  description: >
+    Programa gratuito de crianza positiva y prevención de violencia contra
+    la niñez en Colombia, dirigido a cuidadores de niños de 0 a 5 años.
+  country: "Colombia"
+  language: "es"              # Código ISO 639-1. Afecta textstat y stopwords.
+  duration_weeks: 12
+  target_population: "cuidadores de niños de 0 a 5 años"
+
+  # Lista de ciudades/sitios de implementación (en el orden que aparecerán
+  # en visualizaciones). Usar la misma forma que aparece en los datos.
+  cities:
+    - "Bogota"
+    - "Soacha"
+    - "Neiva"
+    - "Valledupar"
+
+
+# =============================================================================
+# DATOS [ADAPTAR]
+# Rutas de archivos (relativas a la raíz del proyecto) y nombres de columnas
+# del dataset de WhatsApp. Adaptar al esquema de tu base de datos.
+# =============================================================================
+data:
+  input:
+    # Archivo Stata con los mensajes anonimizados (sin PII).
+    # Producido por scripts/do_files/01_remove_pii.do
+    # Para tu proyecto: cambia a la ruta de tu archivo limpio.
+    raw_stata_file: "data/raw/DatosEjemplos-FalsePII.dta"
+
+    # Archivo Excel con el árbol de códigos temáticos del proyecto.
+    # Solo necesario para el paso 08 (citation finder).
+    coding_tree_file: "documentation/Programa/A+P_2025_Arbol de códigos.xlsx"
+    coding_tree_sheet: "Codigos"
+
+    # Hoja del Excel de citas con mensajes de participantes (paso 09).
+    citations_excel_sheet: "Citas_Mensajes_Part"
+
+  # Rutas de archivos intermedios (generados por el pipeline).
+  # Normalmente no es necesario cambiar estos valores.
+  intermediate:
+    preprocessed_messages: "data/clean/mensajes_preprocesados.parquet"
+    chunks: "data/clean/chunks.parquet"
+    vectorstore: "vectorstore"
+
+  # Nombres de columnas en el dataset de WhatsApp [ADAPTAR].
+  # Estos son los nombres que tiene tu .dta después de limpiar con Stata.
+  columns:
+    message_type: "tipo"          # Tipo de mensaje: "Mensaje en Texto", "imagen", etc.
+    message_text: "texto"         # Texto del mensaje (después de preprocesar)
+    sender: "remitente"           # Nombre/rol del remitente
+    city_group: "city_grupo"      # Ciudad + identificador de grupo (e.g., "BogotaGH1")
+    week_number: "n_week"         # Número de semana del programa (1–12)
+    group_id: "v_grupo"           # Identificador único del grupo
+    datetime: "datetime"          # Fecha y hora del mensaje
+    theme: "tema"                 # Tema/sesión del programa
+
+    # Identificadores de participante y grupo [ADAPTAR si difieren en tus datos].
+    participant_id: "id_f"          # Identificador único de cada participante
+    gender_group: "sex_grupo"       # Categoría de género del grupo (Mujer/Hombre)
+
+    # Columnas calculadas por el pipeline (no requieren adaptación):
+    word_count: "n_palabras"
+    char_count: "n_caracteres"
+    length_type: "tipo_longitud"
+    informality_rate: "tasa_informalidad"
+    linguistic_informality_rate: "tasa_inf_linguistica"
+    flesch_score: "flesch"
+    flesch_text: "texto_fk"
+    chunk_id: "chunk_id"
+    n_messages_chunk: "n_mensajes"
+    tokens_approx: "tokens_aprox"
+
+  # Estrategia de chunking [ADAPTAR para datos transversales].
+  # Define qué columnas agrupan los mensajes en una unidad de análisis.
+  #
+  # Datos longitudinales (en el tiempo):
+  #   groupby: ["city_grupo", "n_week"]  →  un chunk por ciudad × semana
+  # Datos transversales (una sola toma):
+  #   groupby: ["v_grupo"]              →  un chunk por grupo de WhatsApp
+  #
+  # Nota: los scripts 10e (retención) y 10f (latencia) solo aplican
+  # con datos longitudinales. El resto del pipeline funciona en ambos casos.
+  chunking:
+    groupby:
+      - "city_grupo"
+      - "n_week"
+
+  # Valores específicos usados para filtrar el dataset [ADAPTAR].
+  values:
+    text_message_type: "Mensaje en Texto"   # Valor en `message_type` para mensajes de texto
+    participant_sender: "Participante"       # Valor en `sender` para participantes
+    facilitator_sender: "Facilitador"        # Valor en `sender` para facilitadores
+    missing_gender: "Sin género"             # Valor de relleno para género desconocido
+
+
+# =============================================================================
+# MODELOS
+# Modelos de ML y API usados en el pipeline. Actualizar según disponibilidad.
+# =============================================================================
+models:
+  # Modelo de sentence-transformers para embeddings.
+  # Opciones multilingüe recomendadas:
+  #   - paraphrase-multilingual-mpnet-base-v2  (bueno, más pesado)
+  #   - paraphrase-multilingual-MiniLM-L12-v2  (más rápido, algo menos preciso)
+  embedding_model: "paraphrase-multilingual-mpnet-base-v2"
+
+  # Modelo Claude para búsqueda semántica (05b) y codificación (10c).
+  # Opciones disponibles (junio 2026):
+  #   - claude-sonnet-4-6    (bueno, más económico)
+  #   - claude-opus-4-7      (mejor calidad, más caro)
+  claude_model: "claude-sonnet-4-6"
+
+
+# =============================================================================
+# BASE DE DATOS VECTORIAL (ChromaDB)
+# Nombres de las colecciones. Adaptar si hay múltiples proyectos en el mismo
+# directorio de vectorstore.
+# =============================================================================
+vectordb:
+  collection_chunks: "llm_wa_chunks"
+  collection_messages: "llm_wa_mensajes"
+  collection_chunks_participants: "llm_wa_chunks_part"
+  collection_messages_participants: "llm_wa_mensajes_part"
+  distance_metric: "cosine"
+
+
+# =============================================================================
+# API ANTHROPIC
+# Parámetros de las llamadas a Claude. Ajustar según tu plan de API.
+# =============================================================================
+api:
+  pause_between_calls: 0.5    # segundos entre llamadas (evitar rate limit)
+  max_tokens_rag: 800         # tokens máximos para respuesta RAG (paso 05b)
+  rag_default_n_results: 4    # chunks a recuperar por defecto en búsqueda semántica
+
+
+# =============================================================================
+# PROMPTS [ADAPTAR]
+# Prompts para las llamadas a Claude. Adaptar el contexto del proyecto.
+# Los marcadores {entre_llaves} son variables que el script reemplaza en tiempo
+# de ejecución — no eliminar.
+# =============================================================================
+prompts:
+
+  # Paso 05b: Búsqueda semántica (RAG)
+  rag_answer: |
+    Eres un asistente de investigación del {project_name},
+    {project_description}
+
+    Responde la siguiente pregunta basándote ÚNICAMENTE en los mensajes de
+    WhatsApp proporcionados. Si la información no está en los mensajes, dilo
+    explícitamente. Cita el chunk relevante cuando sea posible.
+
+    PREGUNTA:
+    {pregunta}
+
+    MENSAJES RELEVANTES:
+    {contexto}
+
+    RESPUESTA:
+
+
+# =============================================================================
+# ANÁLISIS — PARÁMETROS TÉCNICOS
+# Parámetros de los algoritmos de análisis. Cambiar con cuidado.
+# =============================================================================
+analysis:
+  # Detección de cadenas de interacción P-P (paso 10a)
+  interaction:
+    session_gap_minutes: 60        # Silencio > N min → nueva sesión
+    min_participants_per_session: 2
+
+  # Clustering temático (paso 05a)
+  clustering:
+    kmeans_range: [2, 10]          # Rango de k a evaluar
+    kmeans_n_init: 10
+    random_seed: 42
+
+  # Reducción de dimensionalidad UMAP (pasos 05a, 07)
+  umap:
+    n_components: 2
+    n_neighbors: 10
+    min_dist: 0.3
+    seed: 42
+
+  # Clasificación de longitud de mensajes (paso 01)
+  message_length:
+    short_offset: 5               # media - N palabras = umbral "corto"
+    long_offset: 10               # media + N palabras = umbral "largo"
+    categories: ["corto", "mediano", "largo"]
+
+  # Búsqueda de citas (paso 08)
+  citation_search:
+    top_k_chunks: 3
+    top_k_messages: 5
+    min_message_words: 5
+    # Familias del árbol de códigos a incluir en la búsqueda [ADAPTAR]
+    # Los nombres deben coincidir exactamente con la columna "familia" del
+    # Excel definido en data.input.coding_tree_file.
+    relevant_families:
+      - "5. ACTITUD DE LOS PARTICIPANTES FRENTE AL PROGRAMA"
+      - "7. RESULTADOS INICIALES E INTERMEDIOS"
+      - "3. ENFOQUE PARA ESCALAR"
+      - "4. VIABILIDAD DE LA IMPLEMENTACIÓN"
+
+  # Monitoreo de latencia de respuesta (paso 10f) — en horas
+  latency_categories:
+    - label: "≤ 2 h"
+      max_hours: 2
+    - label: "2–12 h"
+      max_hours: 12
+    - label: "12–48 h"
+      max_hours: 48
+    - label: "> 48 h"
+      max_hours: null
+
+  # Procesamiento de embeddings
+  embedding_batch_size: 8
+  vectordb_batch_size: 500
+  words_to_tokens_ratio: 0.75    # Para estimar tokens desde palabras
+
+
+# =============================================================================
+# CODIFICACIÓN — FRAMEWORK DE INTERACCIÓN [ADAPTAR]
+# Indicadores del framework de Dedios-Sanguineti et al. (2025) adaptados
+# al proyecto. Para usar un framework diferente, reemplazar esta sección.
+# =============================================================================
+coding:
+  # Rangos de semanas para cada chunk de codificación manual
+  chunk_ranges:
+    1: [1, 2]
+    2: [3, 4]
+    3: [5, 6]
+    4: [7, 8]
+    5: [9, 10]
+    6: [11, 12]
+
+  # Grupos piloto para el paso 10b (piloto de codificación) [ADAPTAR]
+  # Usar valores reales de tu dataset: grupo → columna group_id,
+  # ciudad → columna city_group, semana → columna week_number.
+  pilot_groups:
+    - grupo: "GRU01"
+      semana: 3
+      ciudad: "Ciudad1"
+      genero: "Mujeres"
+    - grupo: "GRU02"
+      semana: 5
+      ciudad: "Ciudad2"
+      genero: "Hombres"
+
+  # Indicadores de interacción (Dedios-Sanguineti et al., 2025)
+  indicators:
+    - id: "I1"
+      level: "Stance-only"
+      name: "Emergencia de posturas"
+      definition_dedios: >
+        Un participante comparte su punto de vista, opinión o experiencia
+        sobre el tema sin que genere respuesta de otro participante.
+      adaptation: >
+        Postura sobre una práctica de crianza, sobre corresponsabilidad
+        en el hogar, o sobre una experiencia familiar pasada o presente.
+      template_code: "I1_stance"
+
+    - id: "I2"
+      level: "Interacción básica"
+      name: "Consenso"
+      definition_dedios: >
+        Dos o más participantes expresan acuerdo explícito con la postura
+        de otro participante.
+      adaptation: >
+        Un participante valida o refuerza lo que dijo otro. Marcadores:
+        'yo también', 'exactamente', 'estoy de acuerdo', 'me pasa lo mismo'.
+      template_code: "I2_consenso"
+
+    - id: "I3"
+      level: "Interacción básica"
+      name: "Desacuerdo"
+      definition_dedios: >
+        Un participante desafía o contradice explícitamente la postura
+        de otro participante.
+      adaptation: >
+        Un participante matiza o cuestiona lo que dijo otro. Puede ser
+        suave ('pero en mi caso...') o más directo. Incluye tensión entre
+        crianza tradicional y nueva.
+      template_code: "I3_desacuerdo"
+
+    - id: "I4"
+      level: "Interacción básica"
+      name: "Cambio de posición"
+      definition_dedios: >
+        Un participante modifica una postura que había expresado previamente
+        en la misma discusión.
+      adaptation: >
+        Incluye también cuando un participante reporta que cambió una práctica
+        en casa como resultado de la discusión en el grupo.
+      template_code: "I4_cambio_posicion"
+
+    - id: "I5"
+      level: "Interacción compleja"
+      name: "Construcción descriptiva de normalidad"
+      definition_dedios: >
+        Los participantes negocian colectivamente qué comportamientos o
+        situaciones son 'normales' o 'típicas' en su contexto.
+      adaptation: >
+        Participantes co-construyen qué es 'normal' en crianza.
+        Ej: 'En Colombia siempre ha sido así', 'la mayoría de padres lo hace'.
+      template_code: "I5_normalidad"
+
+    - id: "I6"
+      level: "Interacción compleja"
+      name: "Construcción moral colectiva"
+      definition_dedios: >
+        Los participantes co-construyen juicios morales sobre comportamientos,
+        prácticas o situaciones.
+      adaptation: >
+        Participantes negocian qué es 'bueno' o 'malo' en crianza.
+        Implica evaluaciones éticas compartidas.
+      template_code: "I6_moral"
+
+    - id: "I7"
+      level: "Interacción compleja"
+      name: "Identidades compartidas"
+      definition_dedios: >
+        Los participantes co-construyen una identidad colectiva como grupo.
+      adaptation: >
+        Uso del 'nosotros' inclusivo: 'nosotras como madres...',
+        'como papás entendemos...'. Diferente del 'nosotros' familiar.
+      template_code: "I7_identidad"
+
+    - id: "I8"
+      level: "Adicional"
+      name: "Adopción de práctica reportada"
+      definition_dedios: "N/A — indicador nuevo propuesto para intervenciones"
+      adaptation: >
+        Un participante reporta explícitamente haber aplicado algo del
+        programa en casa durante la semana. Evidencia directa de transferencia.
+      template_code: "I8_adopcion_practica"
+
+
+# =============================================================================
+# VISUALIZACIÓN
+# Paletas de colores y parámetros gráficos. Cambiar para adaptar a tu marca.
+# =============================================================================
+visualization:
+  font_family: "Arial"
+  font_size: 12
+  dpi: 150
+  figure_size_report: [12, 6]
+  figure_size_presentation: [12, 5.5]
+  report_figure_width_inches: 5.8
+  line_spacing_value: 276        # Word: 276 = interlineado 1.15
+
+  colors:
+    # [ADAPTAR] Las claves deben coincidir con los valores en project.cities.
+    cities:
+      Bogota: "#1976D2"
+      Soacha: "#388E3C"
+      Neiva: "#F57C00"
+      Valledupar: "#7B1FA2"
+    gender:
+      Hombre: "#1976D2"
+      Mujer: "#E91E8C"
+      "Sin género": "#9E9E9E"
+    interaction_level:
+      compleja: "#1a5276"
+      basica: "#2e86c1"
+      stance-only: "#85c1e9"
+    latency: ["#1B5E20", "#66BB6A", "#FFA726", "#EF6C00", "#B71C1C"]
+
+  heatmap_colormap: "YlOrRd"
