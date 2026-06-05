@@ -296,7 +296,7 @@ cualquier análisis. Implementa 9 patrones de expresiones regulares:
 Después de este paso, los datos se clasifican como **Internal** y pueden
 procesarse con herramientas de IA.
 
-Ver [`documentation/Explicacion-ScriptLimpieza.md`](documentation/Explicacion-ScriptLimpieza.md).
+Ver [`documentation/Process/Explicacion-ScriptLimpieza.md`](documentation/Process/Explicacion-ScriptLimpieza.md).
 
 ```bash
 just stata-script 01_remove_pii
@@ -310,8 +310,15 @@ just stata-script 01_remove_pii
 
 **Script:** `scripts/python_scripts/01_quality_analysis.py`
 
-Evalúa longitud, informalidad lingüística y legibilidad (Flesch-Kincaid)
-de los mensajes. Útil para entender el corpus antes de procesarlo.
+Antes de procesar los mensajes, es útil saber con qué tipo de datos se
+está trabajando. Este paso calcula estadísticas básicas: ¿qué tan largos
+son los mensajes en promedio? ¿qué tan informales son (abreviaturas,
+errores ortográficos)? ¿hay diferencias entre lo que escriben
+facilitadores y participantes?
+
+Estos indicadores ayudan a calibrar expectativas sobre la calidad del
+análisis y a detectar grupos con muy baja participación antes de
+invertir tiempo en pasos posteriores.
 
 ```bash
 uv run python scripts/python_scripts/01_quality_analysis.py
@@ -328,8 +335,12 @@ uv run python scripts/python_scripts/01_quality_analysis.py
 
 **Script:** `scripts/python_scripts/02_preprocessing.py`
 
-Limpieza mínima (espacios múltiples, filtro a mensajes de texto) y
-guardado en formato Parquet para eficiencia.
+Normaliza los mensajes (elimina espacios extra, saltos de línea) y
+filtra solo los mensajes de texto, descartando notificaciones de
+sistema, mensajes eliminados y contenido multimedia que no puede
+analizarse. El resultado se guarda en formato Parquet, que es
+significativamente más rápido de leer que CSV o `.dta` para todos
+los pasos posteriores.
 
 ```bash
 uv run python scripts/python_scripts/02_preprocessing.py
@@ -344,8 +355,15 @@ uv run python scripts/python_scripts/02_preprocessing.py
 
 **Script:** `scripts/python_scripts/03_chunking.py`
 
-Agrupa todos los mensajes de una ciudad en una semana en un solo bloque
-de texto (chunk). Estrategia: `ciudad × semana` = 1 chunk.
+Los modelos de embeddings trabajan mejor con bloques de texto que con
+mensajes individuales (que suelen ser muy cortos para capturar
+significado). Este paso agrupa todos los mensajes de una misma unidad
+de análisis (por ejemplo, ciudad × semana) en un solo bloque de texto.
+
+Esto es lo que permite hacer preguntas como: "¿de qué hablaron en el
+Grupo A durante la semana 3, comparado con el Grupo B?" La estrategia
+de agrupación se configura en `config.yaml` y puede adaptarse a datos
+longitudinales (por grupo y semana) o transversales (solo por grupo).
 
 ```bash
 uv run python scripts/python_scripts/03_chunking.py
@@ -360,11 +378,18 @@ uv run python scripts/python_scripts/03_chunking.py
 
 **Script:** `scripts/python_scripts/04_embeddings.py`
 
-Genera vectores semánticos de cada chunk usando
-`paraphrase-multilingual-mpnet-base-v2` (sentence-transformers). El
-modelo corre 100% local (~400 MB, descarga única), sin enviar datos a
-servidores externos. Los vectores se almacenan en ChromaDB (base
-vectorial local en disco).
+Convierte cada bloque de texto en un vector numérico que captura su
+significado semántico. La idea central es que dos bloques que hablan
+de temas similares tendrán vectores parecidos, y dos que hablan de
+temas distintos tendrán vectores muy diferentes. Este "mapa de
+significados" es la base de todos los análisis posteriores (clustering,
+similitud, búsqueda de citas).
+
+El modelo (`paraphrase-multilingual-mpnet-base-v2`) corre completamente
+en tu computador — no se envía ningún dato a servidores externos. La
+descarga inicial es de ~400 MB y queda guardada localmente. Los
+vectores se almacenan en ChromaDB, una base de datos vectorial local
+que persiste en disco entre sesiones.
 
 ```bash
 uv run python scripts/python_scripts/04_embeddings.py
@@ -379,8 +404,16 @@ uv run python scripts/python_scripts/04_embeddings.py
 
 **Script:** `scripts/python_scripts/05a_clustering.py`
 
-Aplica KMeans sobre los embeddings y reduce dimensiones con UMAP para
-visualizar cómo se agrupan temáticamente las sesiones.
+Agrupa automáticamente las sesiones en temas similares sin necesidad
+de definir los temas de antemano. El resultado es un mapa visual donde
+cada punto es una sesión del programa y los puntos cercanos son
+sesiones que trataron contenidos parecidos.
+
+Es útil para responder preguntas como: ¿cuáles son los grandes ejes
+temáticos que emergen de los grupos? ¿hay sesiones atípicas que se
+alejan del resto? ¿los grupos de distintas ciudades convergen en temas
+similares o divergen? El número de clusters se configura en
+`config.yaml`.
 
 ```bash
 uv run python scripts/python_scripts/05a_clustering.py
@@ -391,15 +424,21 @@ uv run python scripts/python_scripts/05a_clustering.py
 
 ---
 
----
-
 ### Paso 6: Mapas de similitud semántica
 
 **Scripts:** `06_similarity_map.py`, `06b_similarity_map_participantes.py`
 
-Visualiza la evolución semántica del programa proyectando todos los
-chunks en un plano 2D con UMAP. El script `06b` usa solo mensajes de
-participantes.
+Calcula qué tan parecido es el contenido temático entre cada par de
+sesiones y lo muestra como un mapa de calor. Permite responder:
+¿las sesiones de distintos grupos tratan temas similares entre sí?
+¿hay semanas donde el contenido cambia drásticamente respecto a la
+anterior (saltos temáticos)?
+
+Para datos longitudinales, genera también un segundo gráfico con la
+trayectoria semántica semana a semana: ¿el programa mantiene
+coherencia temática o hay semanas que rompen con el hilo? El script
+`06b` replica el mismo análisis filtrando solo mensajes de
+participantes, para separar su voz de la del facilitador.
 
 ```bash
 uv run python scripts/python_scripts/06_similarity_map.py
@@ -413,12 +452,23 @@ uv run python scripts/python_scripts/06b_similarity_map_participantes.py
 
 ### Paso 8: Buscador de citas por código cualitativo
 
+> **Opcional** — este paso solo aplica si tu proyecto ya tiene un árbol
+> de códigos cualitativos definido (familias y códigos temáticos). Si
+> estás empezando el análisis cualitativo desde cero, puedes saltarlo.
+
 **Scripts:** `08_citation_finder.py`, `08b_citation_finder_participantes.py`
 
-Para cada código del árbol de análisis cualitativo (`config.yaml` →
-`analysis.citation_search.relevant_families`), encuentra los mensajes
-más semánticamente relevantes como citas potenciales. El script `08b`
-busca solo entre mensajes de participantes.
+Si ya tienes un marco de codificación cualitativa, este paso te ahorra
+horas de búsqueda manual. Para cada código definido en `config.yaml`,
+el script busca automáticamente en todos los mensajes los fragmentos
+más semánticamente afines a ese código y los presenta como citas
+candidatas para tu análisis.
+
+En lugar de leer miles de mensajes para encontrar ejemplos de un tema
+específico, obtienes una lista ordenada de los más relevantes. El
+script `08b` hace la misma búsqueda filtrando solo mensajes de
+participantes. Los resultados se exportan a Excel para facilitar la
+revisión manual.
 
 ```bash
 uv run python scripts/python_scripts/08_citation_finder.py
@@ -432,10 +482,16 @@ uv run python scripts/python_scripts/08b_citation_finder_participantes.py
 
 ### Paso 9: Análisis de citas
 
+> **Opcional** — requiere haber corrido el Paso 8.
+
 **Script:** `scripts/python_scripts/09_analisis_citas_participantes.py`
 
-Análisis cuantitativo de las citas encontradas por código y familia
-temática.
+Toma las citas encontradas en el paso anterior y produce estadísticas
+sobre su distribución: ¿qué códigos concentran más citas? ¿hay
+diferencias por género, ciudad o momento del programa? Esto ayuda a
+priorizar qué secciones del informe cualitativo desarrollar con más
+profundidad y a identificar dónde hay mayor riqueza de material para
+cada categoría de análisis.
 
 ```bash
 uv run python scripts/python_scripts/09_analisis_citas_participantes.py
@@ -447,10 +503,17 @@ uv run python scripts/python_scripts/09_analisis_citas_participantes.py
 
 **Script:** `scripts/python_scripts/10a_cadenas_interaccion.py`
 
-Detecta cadenas de diálogo genuino entre participantes. Una cadena
-(sesión P-P) se define como una secuencia de mensajes donde al menos
-2 participantes distintos interactúan dentro de una ventana de 60
-minutos. Produce el dataset base para los pasos 10b–10f.
+Los grupos de WhatsApp de programas sociales tienden a un patrón donde
+el facilitador escribe y los participantes responden individualmente,
+sin interactuar entre sí. Este paso detecta los momentos donde sí
+ocurre diálogo genuino entre participantes: secuencias donde al menos
+dos personas distintas se responden dentro de una ventana de tiempo
+(por defecto 60 minutos).
+
+Cuantificar esta interacción es clave para evaluar si el programa está
+generando comunidad y aprendizaje colectivo, no solo transmisión de
+información del facilitador hacia los participantes. El output es el
+dataset base que alimenta todos los pasos 10b–10f.
 
 ```bash
 uv run python scripts/python_scripts/10a_cadenas_interaccion.py
@@ -492,7 +555,28 @@ Cada Excel contiene:
 
 ---
 
-### Pasos 10d–10f: Análisis de interacción
+### Paso 10c: Generación de Excels de codificación a escala
+
+**Script:** `scripts/python_scripts/10c_codificacion.py`
+
+Para programas con muchos grupos y semanas, codificar todo manualmente
+sería inviable. Este paso genera los Excels estructurados para cada
+bloque de análisis (chunks), tomando como base los grupos
+representativos seleccionados en el paso 10b y las interacciones
+identificadas con Claude Code.
+
+Cada Excel incluye los mensajes con color-coding visual, las
+interacciones pre-identificadas y la plantilla de codificación para
+asignar los indicadores DEDIOS. El archivo `CHUNKS` dentro del script
+se puebla con ayuda de Claude Code durante el análisis.
+
+```bash
+uv run python scripts/python_scripts/10c_codificacion.py
+```
+
+---
+
+### Pasos 10d–10f: Análisis de resultados de interacción
 
 ```bash
 uv run python scripts/python_scripts/10d_analisis_interaccion.py  # resultados de codificación
@@ -500,11 +584,16 @@ uv run python scripts/python_scripts/10e_escalabilidad.py         # retención y
 uv run python scripts/python_scripts/10f_monitoreo_inicio_semana.py  # latencia vs. engagement
 ```
 
-- **10d**: Distribución de tipos de interacción, comparación por ciudad y género
-- **10e**: Retención de participantes semana a semana, engagement por grupo,
-  escalabilidad del programa
-- **10f**: Analiza si la rapidez de la primera respuesta al inicio de cada
-  semana predice el nivel de interacción de esa semana
+- **10d**: Con la codificación DEDIOS ya realizada, produce las gráficas
+  comparativas: ¿qué nivel de interacción predomina? ¿hay diferencias
+  entre subgrupos (género, ciudad, semana del programa)?
+- **10e**: Analiza la retención semana a semana (¿cuántos participantes
+  siguen activos?), el engagement por grupo y si el programa es
+  escalable sin perder calidad de interacción.
+- **10f**: Examina si la rapidez con que los participantes responden al
+  primer mensaje de cada semana predice qué tan rica será la
+  interacción esa semana. Útil como indicador de monitoreo en tiempo
+  real para facilitar intervenciones tempranas.
 
 ---
 
