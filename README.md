@@ -28,8 +28,7 @@ un nuevo proyecto solo necesita editar `config.yaml`.
 7. [Adaptar a un nuevo proyecto](#adaptar-a-un-nuevo-proyecto)
 8. [Estructura del repositorio](#estructura-del-repositorio)
 9. [Configuración del entorno](#configuración-del-entorno)
-10. [Privacidad y clasificación de datos](#privacidad-y-clasificación-de-datos)
-11. [Referencias](#referencias)
+10. [Referencias](#referencias)
 
 ---
 
@@ -696,26 +695,6 @@ just stata-script 01_remove_pii  # Correr un script Stata específico
 just lint-py           # Verificar calidad del código Python
 just fmt-python        # Formatear código Python con ruff
 ```
-
----
-
-## Privacidad y clasificación de datos
-
-Este pipeline maneja datos en distintas etapas de sensibilidad:
-
-| Etapa | Clasificación IPA | Puede subir a GitHub | Puede usar con IA |
-| --- | --- | --- | --- |
-| Mensajes con nombres de participantes | **Confidential** | No | No |
-| Mensajes anonimizados (post PII) | **Internal** | No | Sí |
-| Tablas de resumen agregadas | **Internal** | No | Sí |
-| Código y configuración | **Internal** | Sí | Sí |
-
-El archivo `data/raw/full_base_WA_clean_NOPII.dta` ya no contiene PII
-pero sigue siendo **Internal** y no debe subirse a GitHub. Asegúrate de
-que `data/` esté en `.gitignore`.
-
-Ante dudas, consulta las [IPA AI Usage Guidelines](https://ipastorage.box.com/s/mvr67ygvz1y3v8qmgjey67lk7msmyeks)
-o escribe a support@poverty-action.org.
 
 ---
 
