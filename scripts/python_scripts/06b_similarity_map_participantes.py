@@ -1,13 +1,13 @@
 """Paso 7b: Mapa de similitud semántica - Solo participantes
 ============================================================
-Versión del script 07 que excluye mensajes de facilitadores.
+Versión del script 06 que excluye mensajes de facilitadores.
 Solo analiza el contenido generado por participantes del programa.
 
 Los chunks se reconstruyen filtrando únicamente mensajes de participantes,
 y los embeddings se generan en memoria con sentence-transformers
-(no depende de la colección ChromaDB del script 07).
+(no depende de la colección ChromaDB del script 06).
 
-Mismos análisis que 07:
+Mismos análisis que 06:
   1. Heatmap de similitud coseno entre chunks (ciudad x semana)
   2. Evolución semántica: trayectorias UMAP + similitud entre semanas consecutivas
 
@@ -15,9 +15,9 @@ Input:
   - data/clean/mensajes_preprocesados.parquet
 
 Output:
-  - outputs/figures/07b_similarity_heatmap_participantes.png
-  - outputs/figures/07b_semantic_evolution_participantes.png
-  - outputs/tables/07b_similarity_matrix_participantes.csv
+  - outputs/figures/06b_similarity_heatmap_participantes.png
+  - outputs/figures/06b_semantic_evolution_participantes.png
+  - outputs/tables/06b_similarity_matrix_participantes.csv
 """
 
 from __future__ import annotations
@@ -128,7 +128,7 @@ labels = [
 ]
 
 sim_df = pd.DataFrame(sim_ordered, index=labels, columns=labels)
-sim_df.to_csv(OUT_TABLES / "07b_similarity_matrix_participantes.csv")
+sim_df.to_csv(OUT_TABLES / "06b_similarity_matrix_participantes.csv")
 print("  Matriz guardada.")
 
 # ---------------------------------------------------------------------------
@@ -181,7 +181,7 @@ ax.set_title(
     pad=15,
 )
 plt.tight_layout()
-plt.savefig(OUT_FIGURES / "07b_similarity_heatmap_participantes.png", dpi=150)
+plt.savefig(OUT_FIGURES / "06b_similarity_heatmap_participantes.png", dpi=150)
 plt.close()
 print("  Heatmap guardado.")
 
@@ -321,7 +321,7 @@ if IS_LONGITUDINAL:
             )
 
     plt.tight_layout()
-    plt.savefig(OUT_FIGURES / "07b_semantic_evolution_participantes.png", dpi=150)
+    plt.savefig(OUT_FIGURES / "06b_semantic_evolution_participantes.png", dpi=150)
     plt.close()
     print("  Figura de evolución guardada.")
 else:
@@ -347,4 +347,4 @@ if IS_LONGITUDINAL:
     for i, s in sorted(enumerate(sim_consecutivas), key=lambda x: x[1])[:3]:
         print(f"  Semana {semanas[i]} -> {semanas[i + 1]}: similitud {s:.3f}")
 
-print("\nScript 07b completado.")
+print("\nScript 06b completado.")

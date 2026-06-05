@@ -33,7 +33,7 @@ cd scripts/python_scripts
 uv run python 02_preprocessing.py
 uv run python 03_chunking.py
 uv run python 04_embeddings.py
-uv run python 07_similarity_map.py
+uv run python 06_similarity_map.py
 ```
 
 Or use the `/run-step <N>` skill to run any step with pre-flight validation.
@@ -47,7 +47,7 @@ Or use the `/run-step <N>` skill to run any step with pre-flight validation.
 | 03 | `03_chunking.py` | `data/clean/chunks.parquet` |
 | 04 | `04_embeddings.py` | ChromaDB vectorstore |
 | 05a | `05a_clustering.py` | Cluster figures + CSV |
-| 07 | `07_similarity_map.py` | Semantic heatmap + evolution figure |
+| 06 | `06_similarity_map.py` | Semantic heatmap + evolution figure |
 | 08b | `08b_citation_finder_participantes.py` | Citations per qualitative code |
 | 10c | `10c_codificacion.py` | Full coding with framework indicators |
 
@@ -84,7 +84,7 @@ prompts:
 
 - **Longitudinal** (default): `chunking.groupby: ["city_grupo", "n_week"]`
 - **Cross-sectional**: `chunking.groupby: ["city_grupo"]` — the temporal evolution
-  figure in step 07 is automatically skipped.
+  figure in step 06 is automatically skipped.
 
 ## Available Skills
 

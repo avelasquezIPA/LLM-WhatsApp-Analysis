@@ -38,16 +38,16 @@ un nuevo proyecto solo necesita editar `config.yaml`.
 Toma los mensajes de WhatsApp de un programa social (ya limpios de PII) y
 produce:
 
-- **Resúmenes temáticos** por grupo y semana (via Claude API)
 - **Mapa de similitud semántica** entre sesiones (UMAP + embeddings)
 - **Clustering temático** para identificar temas recurrentes
 - **Buscador de citas** por código cualitativo (búsqueda vectorial)
+- **Búsqueda semántica (RAG)** para responder preguntas de investigación (via Claude)
 - **Indicadores de interacción participante-participante** (cadenas de diálogo,
   latencia de respuesta, retención, escalabilidad)
 - **Archivos Excel de codificación** listos para análisis cualitativo manual
 
 El pipeline combina **Stata** (limpieza y remoción de PII) con **Python**
-(embeddings, clustering, summarización via Claude API).
+(embeddings, clustering, búsqueda semántica y codificación via Claude API).
 
 ---
 
@@ -59,7 +59,7 @@ Antes de correr cualquier paso:
 | --- | --- | --- |
 | Python 3.12+ | Todo el pipeline Python | [python.org](https://www.python.org/downloads/) |
 | `uv` | Gestor de entorno y dependencias | `pip install uv` |
-| Acceso a Claude API | Pasos 5b, 6 y 10c (Claude) | Incluido en el plan Claude Enterprise de tu organización |
+| Acceso a Claude API | Pasos 05b y 10c (RAG y codificación) | Incluido en el plan Claude Enterprise de tu organización |
 | Stata 17+ | Solo paso 0 (remoción de PII) | Licencia institucional |
 
 Los pasos 1–10f son 100% Python. Stata **solo es necesario** si tu dataset
@@ -102,15 +102,15 @@ cd scripts/python_scripts
 uv run python 02_preprocessing.py    # limpieza de texto
 uv run python 03_chunking.py         # agrupar mensajes
 uv run python 04_embeddings.py       # generar vectores (descarga modelo ~400 MB la primera vez)
-uv run python 07_similarity_map.py   # mapa de similitud semántica
+uv run python 06_similarity_map.py   # mapa de similitud semántica
 ```
 
 **Outputs esperados:**
 
 ```text
-outputs/figures/07_similarity_heatmap.png — mapa de calor semántico
-outputs/figures/07_semantic_evolution.png  — evolución semántica por semana
-outputs/tables/07_similarity_matrix.csv   — matriz de similitud entre chunks
+outputs/figures/06_similarity_heatmap.png — mapa de calor semántico
+outputs/figures/06_semantic_evolution.png  — evolución semántica por semana
+outputs/tables/06_similarity_matrix.csv   — matriz de similitud entre chunks
 ```
 
 > El pipeline mínimo **no requiere Stata**. Los datos de demo ya están limpios de PII.
@@ -142,7 +142,7 @@ uv run python 02_preprocessing.py
 uv run python 03_chunking.py
 uv run python 04_embeddings.py
 uv run python 05a_clustering.py      # opcional: clustering temático
-uv run python 07_similarity_map.py
+uv run python 06_similarity_map.py
 uv run python 08b_citation_finder_participantes.py   # requiere árbol de códigos en config.yaml
 uv run python 10a_cadenas_interaccion.py
 uv run python 10c_codificacion.py    # requiere acceso a Claude API (plan enterprise)
@@ -215,8 +215,8 @@ para el análisis cualitativo.
 | `04_embeddings.py` | Genera vectores semánticos (sentence-transformers, local) |
 | `05a_clustering.py` | Clustering temático KMeans + UMAP |
 | `05b_semantic_search.py` | Búsqueda semántica RAG interactiva |
-| `07_similarity_map.py` | Mapa de similitud semántica entre chunks |
-| `07b_similarity_map_participantes.py` | Mismo mapa, solo mensajes de participantes |
+| `06_similarity_map.py` | Mapa de similitud semántica entre chunks |
+| `06b_similarity_map_participantes.py` | Mismo mapa, solo mensajes de participantes |
 | `08_citation_finder.py` | Busca citas por código del árbol cualitativo |
 | `08b_citation_finder_participantes.py` | Mismo buscador, solo participantes |
 | `09_analisis_citas_participantes.py` | Análisis cuantitativo de citas encontradas |
@@ -390,21 +390,21 @@ uv run python scripts/python_scripts/05b_semantic_search.py
 
 ---
 
-### Paso 7: Mapas de similitud semántica
+### Paso 6: Mapas de similitud semántica
 
-**Scripts:** `07_similarity_map.py`, `07b_similarity_map_participantes.py`
+**Scripts:** `06_similarity_map.py`, `06b_similarity_map_participantes.py`
 
 Visualiza la evolución semántica del programa proyectando todos los
-chunks en un plano 2D con UMAP. El script `07b` usa solo mensajes de
+chunks en un plano 2D con UMAP. El script `06b` usa solo mensajes de
 participantes.
 
 ```bash
-uv run python scripts/python_scripts/07_similarity_map.py
-uv run python scripts/python_scripts/07b_similarity_map_participantes.py
+uv run python scripts/python_scripts/06_similarity_map.py
+uv run python scripts/python_scripts/06b_similarity_map_participantes.py
 ```
 
-**Output:** `outputs/figures/07_similarity_map.png`,
-`outputs/figures/07b_similarity_map_participantes.png`
+**Output:** `outputs/figures/06_similarity_map.png`,
+`outputs/figures/06b_similarity_map_participantes.png`
 
 ---
 
@@ -616,8 +616,8 @@ LLM-Apapachar/
 │       ├── 04_embeddings.py
 │       ├── 05a_clustering.py
 │       ├── 05b_semantic_search.py
-│       ├── 07_similarity_map.py
-│       ├── 07b_similarity_map_participantes.py
+│       ├── 06_similarity_map.py
+│       ├── 06b_similarity_map_participantes.py
 │       ├── 08_citation_finder.py
 │       ├── 08b_citation_finder_participantes.py
 │       ├── 09_analisis_citas_participantes.py

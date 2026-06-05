@@ -28,8 +28,8 @@ Where `<step>` is one of:
 | 04 | `04_embeddings.py` | Generate sentence embeddings (ChromaDB) | `mensajes_preprocesados.parquet` |
 | 05a | `05a_clustering.py` | KMeans clustering + UMAP visualization | `mensajes_preprocesados.parquet` |
 | 05b | `05b_semantic_search.py` | RAG search (interactive) | ChromaDB vectorstore, Claude API |
-| 07 | `07_similarity_map.py` | Semantic similarity heatmap + evolution | ChromaDB vectorstore |
-| 07b | `07b_similarity_map_participantes.py` | Same, participants only | ChromaDB vectorstore |
+| 06 | `06_similarity_map.py` | Semantic similarity heatmap + evolution | ChromaDB vectorstore |
+| 06b | `06b_similarity_map_participantes.py` | Same, participants only | ChromaDB vectorstore |
 | 08 | `08_citation_finder.py` | Find quotes per qualitative code | Coding tree Excel, ChromaDB |
 | 08b | `08b_citation_finder_participantes.py` | Same, participants only | Same as 08 |
 | 09 | `09_analisis_citas_participantes.py` | Analyze citations by gender/city | `08b_citas_*.xlsx` |
@@ -95,7 +95,7 @@ After the script completes:
 For a complete run from scratch:
 
 ```
-02 → 03 → 04 → 05a → 07 → 07b → 08 → 08b → 09 → 10a → 10c → 10e → 10f
+02 → 03 → 04 → 05a → 06 → 06b → 08 → 08b → 09 → 10a → 10c → 10e → 10f
 ```
 
 Steps 01, 05b, 10b, 10d are optional/supplementary.

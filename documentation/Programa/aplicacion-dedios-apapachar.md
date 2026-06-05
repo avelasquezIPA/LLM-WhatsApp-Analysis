@@ -145,7 +145,7 @@ Antes de diseñar el nuevo script, conviene mapear qué está disponible:
 | --- | --- | --- |
 | Mensajes preprocesados con remitente, ciudad, semana | `01_quality_analysis.py` | Base de datos para filtrar solo participantes |
 | Embeddings de mensajes individuales de participantes | `08b_citation_finder_participantes.py` | 2,318 mensajes ≥5 palabras indexados en ChromaDB |
-| Similitud semántica por semana | `07b_similarity_map_participantes.py` | Identifica semanas con mayor cambio temático (candidatas para análisis profundo) |
+| Similitud semántica por semana | `06b_similarity_map_participantes.py` | Identifica semanas con mayor cambio temático (candidatas para análisis profundo) |
 | Citas encontradas por código cualitativo | `08b_citation_finder_participantes.py` | Mensajes más relevantes por código del árbol |
 | Género de participantes inferido de id_f | `08b_citation_finder_participantes.py` | Permite análisis de interacción por género |
 | Variable `tema` por semana | datos limpios | Permite segmentar por contenido temático del programa |

@@ -11,9 +11,9 @@ Script 1 de 2: Mapa de similitud entre chunks y evolución semántica.
 
 Input:  data/vectorstore/ (ChromaDB)
 Output:
-  - outputs/figures/07_similarity_heatmap.png
-  - outputs/figures/07_semantic_evolution.png
-  - outputs/tables/07_similarity_matrix.csv
+  - outputs/figures/06_similarity_heatmap.png
+  - outputs/figures/06_semantic_evolution.png
+  - outputs/tables/06_similarity_matrix.csv
 """
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ labels = [
 
 # Guardar matriz
 sim_df = pd.DataFrame(sim_ordered, index=labels, columns=labels)
-sim_df.to_csv(OUT_TABLES / "07_similarity_matrix.csv")
+sim_df.to_csv(OUT_TABLES / "06_similarity_matrix.csv")
 print("  Matriz guardada.")
 
 # ---------------------------------------------------------------------------
@@ -136,7 +136,7 @@ ax.set_title(
     pad=15,
 )
 plt.tight_layout()
-plt.savefig(OUT_FIGURES / "07_similarity_heatmap.png", dpi=150)
+plt.savefig(OUT_FIGURES / "06_similarity_heatmap.png", dpi=150)
 plt.close()
 print("  Heatmap guardado.")
 
@@ -281,7 +281,7 @@ if IS_LONGITUDINAL:
             )
 
     plt.tight_layout()
-    plt.savefig(OUT_FIGURES / "07_semantic_evolution.png", dpi=150)
+    plt.savefig(OUT_FIGURES / "06_semantic_evolution.png", dpi=150)
     plt.close()
     print("  Figura de evolución guardada.")
 else:
