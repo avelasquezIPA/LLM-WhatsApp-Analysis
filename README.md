@@ -177,9 +177,6 @@ intercambian mensajes, reflexiones y actividades semanales.
 
 **Sitios de implementación (2025):** Bogotá, Soacha, Neiva, Valledupar.
 
-Para la documentación completa del programa ver
-[`documentation/PROYECTO.md`](documentation/PROYECTO.md).
-
 ### Los datos de WhatsApp
 
 Cada grupo de WhatsApp contiene:
@@ -263,6 +260,16 @@ según 8 indicadores:
 Los indicadores I1–I7 son del framework original; I8 es un indicador nuevo
 propuesto para intervenciones de crianza (evidencia directa de
 transferencia al hogar).
+
+### Ejemplos de outputs (Apapáchar)
+
+#### Heatmap de sesiones participante-participante por grupo (paso 10a)
+
+![Heatmap de interacción por grupo](documentation/examples/apapachar_10a_heatmap_interaccion_grupos.png)
+
+#### Niveles de interacción DEDIOS por ciudad y género (paso 10d)
+
+![Niveles de interacción DEDIOS por ciudad y género](documentation/examples/apapachar_10d_niveles_interaccion_dedios.png)
 
 ---
 
