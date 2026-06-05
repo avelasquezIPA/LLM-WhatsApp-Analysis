@@ -25,18 +25,15 @@ Run `/check-pii` before loading any dataset to verify it is safe.
 # 1. Install dependencies
 uv sync
 
-# 2. Claude API access is included in your organization's Claude Enterprise plan.
-#    If running scripts outside Claude Code, add your key to .env:
-#    echo "ANTHROPIC_API_KEY=<your-enterprise-key>" >> .env
-
-# 3. Configure your project
+# 2. Configure your project
 # Edit config.yaml: project name, column names, cities, prompts
 
-# 4. Run the pipeline
+# 3. Run the pipeline
 cd scripts/python_scripts
 uv run python 02_preprocessing.py
 uv run python 03_chunking.py
-uv run python 06_summarization.py
+uv run python 04_embeddings.py
+uv run python 07_similarity_map.py
 ```
 
 Or use the `/run-step <N>` skill to run any step with pre-flight validation.
@@ -50,7 +47,6 @@ Or use the `/run-step <N>` skill to run any step with pre-flight validation.
 | 03 | `03_chunking.py` | `data/clean/chunks.parquet` |
 | 04 | `04_embeddings.py` | ChromaDB vectorstore |
 | 05a | `05a_clustering.py` | Cluster figures + CSV |
-| 06 | `06_summarization.py` | Per-chunk summaries (Claude API) |
 | 07 | `07_similarity_map.py` | Semantic heatmap + evolution figure |
 | 08b | `08b_citation_finder_participantes.py` | Citations per qualitative code |
 | 10c | `10c_codificacion.py` | Full coding with framework indicators |
@@ -80,8 +76,8 @@ models:
   embedding_model: "paraphrase-multilingual-mpnet-base-v2"
 
 prompts:
-  chunk_summary: |
-    Eres un asistente... {ciudad} {semana} {texto_chunk}
+  rag_answer: |
+    Eres un asistente... {pregunta} {contexto}
 ```
 
 ### Cross-sectional vs. longitudinal data

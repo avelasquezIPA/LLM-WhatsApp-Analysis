@@ -80,34 +80,21 @@ cd LLM-Apapachar
 uv sync
 ```
 
-### 2. Verificar acceso a Claude API
+### 2. Verificar config.yaml
 
-Los pasos que llaman a Claude (06, 05b, 10c) requieren acceso a la API de
-Anthropic, incluido en el **plan Claude Enterprise** de tu organización.
-
-Si tu organización ya tiene configurado Claude Code o Claude Enterprise, el
-acceso a la API está disponible sin ninguna configuración adicional.
-Si corres los scripts de Python de forma independiente (sin Claude Code),
-añade tu clave al archivo `.env`:
-
-```bash
-# Solo necesario para ejecución standalone fuera de Claude Code
-echo "ANTHROPIC_API_KEY=<tu-clave-enterprise>" >> .env
-```
-
-### 3. Apuntar config.yaml al dataset de demo
-
-En `config.yaml`, cambiar la ruta del archivo de entrada:
+El repositorio ya apunta al dataset de demo por defecto:
 
 ```yaml
 data:
   input:
-    raw_stata_file: "data/raw/DatosEjemplos-FalsePII.dta"   # <-- demo
+    raw_stata_file: "data/raw/DatosEjemplos-FalsePII.dta"   # <-- demo incluido
 ```
 
-### 4. Correr el pipeline mínimo
+No se necesita cambiar nada para la prueba.
 
-Los pasos obligatorios para obtener resúmenes y un mapa semántico:
+### 3. Correr el pipeline
+
+Los pasos para generar el mapa de similitud semántica:
 
 ```bash
 cd scripts/python_scripts
@@ -115,16 +102,15 @@ cd scripts/python_scripts
 uv run python 02_preprocessing.py    # limpieza de texto
 uv run python 03_chunking.py         # agrupar mensajes
 uv run python 04_embeddings.py       # generar vectores (descarga modelo ~400 MB la primera vez)
-uv run python 06_summarization.py    # resumir con Claude (~$0.05 con el dataset demo)
 uv run python 07_similarity_map.py   # mapa de similitud semántica
 ```
 
 **Outputs esperados:**
 
 ```text
-outputs/tables/06a_resumenes_chunks.csv   — resumen por grupo × semana
-outputs/tables/06c_resumen_ejecutivo.txt  — resumen ejecutivo del programa
 outputs/figures/07_similarity_heatmap.png — mapa de calor semántico
+outputs/figures/07_semantic_evolution.png  — evolución semántica por semana
+outputs/tables/07_similarity_matrix.csv   — matriz de similitud entre chunks
 ```
 
 > El pipeline mínimo **no requiere Stata**. Los datos de demo ya están limpios de PII.
@@ -156,7 +142,6 @@ uv run python 02_preprocessing.py
 uv run python 03_chunking.py
 uv run python 04_embeddings.py
 uv run python 05a_clustering.py      # opcional: clustering temático
-uv run python 06_summarization.py    # requiere acceso a Claude API (plan enterprise)
 uv run python 07_similarity_map.py
 uv run python 08b_citation_finder_participantes.py   # requiere árbol de códigos en config.yaml
 uv run python 10a_cadenas_interaccion.py
@@ -230,7 +215,6 @@ para el análisis cualitativo.
 | `04_embeddings.py` | Genera vectores semánticos (sentence-transformers, local) |
 | `05a_clustering.py` | Clustering temático KMeans + UMAP |
 | `05b_semantic_search.py` | Búsqueda semántica RAG interactiva |
-| `06_summarization.py` | Resúmenes por chunk y ejecutivo (Claude API) |
 | `07_similarity_map.py` | Mapa de similitud semántica entre chunks |
 | `07b_similarity_map_participantes.py` | Mismo mapa, solo mensajes de participantes |
 | `08_citation_finder.py` | Busca citas por código del árbol cualitativo |
@@ -403,27 +387,6 @@ respuestas con citas, usando Retrieval-Augmented Generation con Claude.
 ```bash
 uv run python scripts/python_scripts/05b_semantic_search.py
 ```
-
----
-
-### Paso 6: Summarización con Claude API
-
-**Script:** `scripts/python_scripts/06_summarization.py`
-
-Genera resúmenes estructurados de los mensajes de WhatsApp en tres
-modalidades:
-
-- **6a**: Un resumen por chunk (ciudad × semana) — costo estimado ~$1.10 USD
-- **6c**: Resumen ejecutivo del programa completo (map-reduce) — ~$0.05 USD
-
-Requiere acceso a la Claude API (incluido en el plan Claude Enterprise de tu organización).
-
-```bash
-uv run python scripts/python_scripts/06_summarization.py
-```
-
-**Output:** `outputs/tables/06a_resumenes_chunks.csv`,
-`outputs/tables/06c_resumen_ejecutivo.txt`
 
 ---
 
@@ -653,7 +616,6 @@ LLM-Apapachar/
 │       ├── 04_embeddings.py
 │       ├── 05a_clustering.py
 │       ├── 05b_semantic_search.py
-│       ├── 06_summarization.py
 │       ├── 07_similarity_map.py
 │       ├── 07b_similarity_map_participantes.py
 │       ├── 08_citation_finder.py
@@ -714,7 +676,7 @@ Crear un archivo `.env` en la raíz del proyecto:
 STATA_CMD=C:\Program Files\Stata18\StataSE-64.exe
 STATA_EDITION=se
 
-# Solo necesario si corres los scripts de Claude (06, 05b, 10c) fuera de Claude Code.
+# Solo necesario si corres los scripts de Claude (05b, 10c) fuera de Claude Code.
 # Si usas Claude Code (plan enterprise), el acceso a la API ya está disponible.
 # ANTHROPIC_API_KEY=<tu-clave-enterprise>
 ```

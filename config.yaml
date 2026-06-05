@@ -122,7 +122,7 @@ models:
   #   - paraphrase-multilingual-MiniLM-L12-v2  (más rápido, algo menos preciso)
   embedding_model: "paraphrase-multilingual-mpnet-base-v2"
 
-  # Modelo Claude para summarización y codificación (paso 06, 05b).
+  # Modelo Claude para búsqueda semántica (05b) y codificación (10c).
   # Opciones disponibles (junio 2026):
   #   - claude-sonnet-4-6    (bueno, más económico)
   #   - claude-opus-4-7      (mejor calidad, más caro)
@@ -148,8 +148,6 @@ vectordb:
 # =============================================================================
 api:
   pause_between_calls: 0.5    # segundos entre llamadas (evitar rate limit)
-  max_tokens_summary: 400     # tokens máximos por resumen de chunk (paso 06a)
-  max_tokens_executive: 1000  # tokens máximos para resumen ejecutivo (paso 06c)
   max_tokens_rag: 800         # tokens máximos para respuesta RAG (paso 05b)
   rag_default_n_results: 4    # chunks a recuperar por defecto en búsqueda semántica
 
@@ -161,52 +159,6 @@ api:
 # de ejecución — no eliminar.
 # =============================================================================
 prompts:
-
-  # Paso 06a: Resumen por chunk de WhatsApp
-  chunk_summary: |
-    Eres un asistente de investigación del {project_name},
-    {project_description}
-
-    A continuación tienes mensajes de WhatsApp del grupo de {ciudad},
-    correspondientes a la semana {semana} del programa.
-    El tema de esta sesión es: "{tema}".
-
-    Los mensajes son de facilitadores (guías del programa) y participantes
-    (cuidadores/padres de familia).
-
-    Genera un resumen conciso que capture:
-    1. Los temas principales discutidos
-    2. El tono general del grupo (participación, compromiso, dificultades)
-    3. Aspectos relevantes sobre {project_focus}
-    4. Cualquier preocupación o logro notable
-
-    El resumen debe ser objetivo, en español, de máximo 150 palabras.
-
-    MENSAJES:
-    {texto_chunk}
-
-    RESUMEN:
-
-  # Paso 06c: Resumen ejecutivo de todos los chunks
-  executive_summary: |
-    Eres un asistente de investigación del {project_name},
-    {project_description}
-
-    A continuación tienes resúmenes de {n_chunks} grupos de WhatsApp de
-    {n_cities} ciudades ({cities_list}) durante las {n_weeks} semanas del programa.
-
-    Genera un resumen ejecutivo que capture:
-    1. Los temas más recurrentes en todos los grupos
-    2. Diferencias notables entre ciudades o semanas
-    3. Evolución del programa a lo largo del tiempo
-    4. Hallazgos más relevantes para la investigación
-
-    El resumen debe ser en español, de máximo 400 palabras.
-
-    RESÚMENES:
-    {resumenes}
-
-    RESUMEN EJECUTIVO:
 
   # Paso 05b: Búsqueda semántica (RAG)
   rag_answer: |

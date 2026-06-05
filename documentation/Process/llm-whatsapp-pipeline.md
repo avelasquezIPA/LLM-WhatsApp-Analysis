@@ -33,12 +33,8 @@ Mensajes WhatsApp anonimizados (.csv / .xlsx)
   [PASO 5a]  [PASO 5b]
  Clustering   Búsqueda
  temático     semántica (RAG)
-        |        |
-         --------
-            |
-     [PASO 6] Summarización con LLM
-            |
-     Resúmenes estructurados por grupo/sesión
+        |
+     Análisis de similitud semántica [PASO 7]
 ```
 
 ---
@@ -46,7 +42,7 @@ Mensajes WhatsApp anonimizados (.csv / .xlsx)
 ## PASO 1: Análisis de calidad de los mensajes
 
 Antes de procesar, el paper recomienda evaluar tres dimensiones de calidad. Esto es
-importante porque mensajes de mala calidad afectan directamente la calidad del resumen.
+importante porque mensajes de mala calidad afectan directamente la calidad de los embeddings y el análisis.
 
 ### 1.1 Tamaño
 
@@ -285,119 +281,6 @@ def buscar_chunks_relevantes(pregunta, n_resultados=5):
 
 ---
 
-## PASO 6: Summarización con Claude (LLM)
-
-### 6a. Summarización directa de un chunk
-
-```python
-import anthropic
-
-cliente_claude = anthropic.Anthropic()
-
-def resumir_chunk(texto_chunk, ciudad, semana):
-    prompt = f"""Eres un asistente de investigación del Programa Apapachar, un programa
-de crianza positiva y prevención de violencia contra la niñez en Colombia.
-
-A continuación tienes mensajes de WhatsApp de un grupo del programa en {ciudad},
-correspondientes a la semana {semana}. Los mensajes son de facilitadores y beneficiarios
-(cuidadores/padres de familia).
-
-Tu tarea es generar un resumen conciso que capture:
-1. Los temas principales discutidos
-2. El tono general del grupo (participación, compromiso, dificultades)
-3. Aspectos relevantes sobre crianza, violencia, o dinámicas familiares mencionadas
-4. Cualquier preocupación o logro notable
-
-El resumen debe ser objetivo, en español, de máximo 150 palabras.
-
-MENSAJES:
-{texto_chunk}
-
-RESUMEN:"""
-
-    respuesta = cliente_claude.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=400,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return respuesta.content[0].text
-```
-
-### 6b. RAG: Responder preguntas de investigación
-
-```python
-def responder_pregunta_investigacion(pregunta):
-    # 1. Recuperar chunks relevantes
-    chunks_relevantes = buscar_chunks_relevantes(pregunta, n_resultados=5)
-    contexto = "\n\n---\n\n".join(chunks_relevantes)
-
-    # 2. Construir prompt con contexto real
-    prompt = f"""Eres un asistente de investigación del Programa Apapachar.
-Responde la siguiente pregunta basándote ÚNICAMENTE en los mensajes de WhatsApp
-proporcionados. Si la información no está en los mensajes, dilo explícitamente.
-
-PREGUNTA: {pregunta}
-
-MENSAJES RELEVANTES:
-{contexto}
-
-RESPUESTA:"""
-
-    respuesta = cliente_claude.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=600,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return respuesta.content[0].text
-```
-
-**Ventaja del RAG:** Claude solo trabaja con texto real de tus datos, minimizando
-alucinaciones. Las respuestas están fundamentadas en mensajes concretos.
-
-### 6c. Summarización jerárquica (para datasets grandes)
-
-```python
-# MAP: resumir cada chunk individualmente
-resumenes_parciales = []
-for _, chunk in chunks.iterrows():
-    resumen = resumir_chunk(chunk['texto_chunk'], chunk['ciudad'], chunk['semana'])
-    resumenes_parciales.append(resumen)
-
-# REDUCE: generar resumen final de todos los resúmenes
-texto_resumenes = "\n\n".join(resumenes_parciales)
-resumen_final = cliente_claude.messages.create(
-    model="claude-sonnet-4-6",
-    max_tokens=800,
-    messages=[{
-        "role": "user",
-        "content": f"""A partir de los siguientes resúmenes semanales del Programa
-Apapachar, genera un resumen ejecutivo del período completo que incluya:
-- Temas recurrentes entre semanas
-- Evolución del programa
-- Hallazgos relevantes para la investigación
-
-RESÚMENES SEMANALES:
-{texto_resumenes}"""
-    }]
-)
-```
-
----
-
-## Criterios de evaluación de resúmenes
-
-El paper propone cuatro criterios para evaluar la calidad de los resúmenes.
-Se pueden aplicar manualmente o usando Claude como evaluador:
-
-| Criterio | Pregunta clave | Escala |
-|---|---|---|
-| **Cobertura** | ¿El resumen cubre todos los aspectos importantes? | 1-5 |
-| **Relevancia** | ¿Todo lo que dice el resumen es relevante? | 1-5 |
-| **Redundancia** | ¿El resumen evita repetir información? | 1-5 |
-| **Veracidad** | ¿El resumen no contiene información falsa? | 1-5 |
-
----
-
 ## Stack tecnológico completo
 
 | Componente | Herramienta | Costo | Instalación |
@@ -407,20 +290,12 @@ Se pueden aplicar manualmente o usando Claude como evaluador:
 | Vector store | `chromadb` | Gratuito | `uv add chromadb` |
 | Clustering | `scikit-learn` | Gratuito | `uv add scikit-learn` |
 | Visualización | `umap-learn` + `matplotlib` | Gratuito | `uv add umap-learn matplotlib` |
-| Summarización / RAG | Claude API (Anthropic) | Pago por uso | `uv add anthropic` |
+| RAG / Codificación | Claude API (Anthropic) | Plan Enterprise | `uv add anthropic` |
 
 ### Agregar todas las dependencias de una vez
 
 ```bash
 uv add pandas sentence-transformers chromadb scikit-learn umap-learn matplotlib anthropic
-```
-
-### Configurar API key de Claude
-
-En el archivo `.env` del proyecto:
-
-```
-ANTHROPIC_API_KEY=tu_api_key_aqui
 ```
 
 ---
@@ -435,9 +310,8 @@ ANTHROPIC_API_KEY=tu_api_key_aqui
 5. Generar embeddings con sentence-transformers      <- PASO 4
 6. Guardar vectores en ChromaDB                      <- PASO 4
 7. Clustering temático (KMeans + UMAP)               <- PASO 5a
-8. Etiquetar clusters con Claude                     <- PASO 5a + 6
-9. Summarización por chunk/sesión                    <- PASO 6
-10. Implementar búsqueda semántica (RAG)             <- PASO 5b + 6
+8. Análisis de similitud semántica entre chunks      <- PASO 7
+9. Búsqueda semántica (RAG) con Claude               <- PASO 5b
 ```
 
 ---
