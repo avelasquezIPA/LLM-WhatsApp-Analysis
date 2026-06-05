@@ -38,7 +38,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "codespell>=2.4.1",
+    "codespell>=2.4.2",
     "pre-commit>=4.5.1",
     "ruff>=0.14.13",
     "sqlfluff>=4.0.0",
