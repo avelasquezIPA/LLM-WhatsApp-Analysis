@@ -25,8 +25,9 @@ Run `/check-pii` before loading any dataset to verify it is safe.
 # 1. Install dependencies
 uv sync
 
-# 2. Add your Anthropic API key
-echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env
+# 2. Claude API access is included in your organization's Claude Enterprise plan.
+#    If running scripts outside Claude Code, add your key to .env:
+#    echo "ANTHROPIC_API_KEY=<your-enterprise-key>" >> .env
 
 # 3. Configure your project
 # Edit config.yaml: project name, column names, cities, prompts

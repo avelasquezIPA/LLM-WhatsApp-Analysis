@@ -59,7 +59,7 @@ Antes de correr cualquier paso:
 | --- | --- | --- |
 | Python 3.12+ | Todo el pipeline Python | [python.org](https://www.python.org/downloads/) |
 | `uv` | Gestor de entorno y dependencias | `pip install uv` |
-| Anthropic API key | Pasos 5b, 6 y 10c (Claude) | [console.anthropic.com](https://console.anthropic.com/) |
+| Acceso a Claude API | Pasos 5b, 6 y 10c (Claude) | Incluido en el plan Claude Enterprise de tu organización |
 | Stata 17+ | Solo paso 0 (remoción de PII) | Licencia institucional |
 
 Los pasos 1–10f son 100% Python. Stata **solo es necesario** si tu dataset
@@ -80,11 +80,19 @@ cd LLM-Apapachar
 uv sync
 ```
 
-### 2. Configurar API key
+### 2. Verificar acceso a Claude API
+
+Los pasos que llaman a Claude (06, 05b, 10c) requieren acceso a la API de
+Anthropic, incluido en el **plan Claude Enterprise** de tu organización.
+
+Si tu organización ya tiene configurado Claude Code o Claude Enterprise, el
+acceso a la API está disponible sin ninguna configuración adicional.
+Si corres los scripts de Python de forma independiente (sin Claude Code),
+añade tu clave al archivo `.env`:
 
 ```bash
-# Crear archivo .env en la raíz del proyecto
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
+# Solo necesario para ejecución standalone fuera de Claude Code
+echo "ANTHROPIC_API_KEY=<tu-clave-enterprise>" >> .env
 ```
 
 ### 3. Apuntar config.yaml al dataset de demo
@@ -133,9 +141,8 @@ git clone <url-del-repo>
 cd LLM-Apapachar
 uv sync
 
-# 2. Configurar credenciales
-echo "ANTHROPIC_API_KEY=sk-ant-..."  > .env
-echo "STATA_CMD=C:\Program Files\Stata18\StataSE-64.exe" >> .env
+# 2. Configurar credenciales de Stata (el acceso a Claude API es vía plan enterprise)
+echo "STATA_CMD=C:\Program Files\Stata18\StataSE-64.exe" > .env
 echo "STATA_EDITION=se" >> .env
 
 # 3. Editar config.yaml — ajustar nombres de columnas, ciudades, prompts
@@ -149,11 +156,11 @@ uv run python 02_preprocessing.py
 uv run python 03_chunking.py
 uv run python 04_embeddings.py
 uv run python 05a_clustering.py      # opcional: clustering temático
-uv run python 06_summarization.py    # requiere ANTHROPIC_API_KEY
+uv run python 06_summarization.py    # requiere acceso a Claude API (plan enterprise)
 uv run python 07_similarity_map.py
 uv run python 08b_citation_finder_participantes.py   # requiere árbol de códigos en config.yaml
 uv run python 10a_cadenas_interaccion.py
-uv run python 10c_codificacion.py    # requiere ANTHROPIC_API_KEY
+uv run python 10c_codificacion.py    # requiere acceso a Claude API (plan enterprise)
 ```
 
 ---
@@ -409,7 +416,7 @@ modalidades:
 - **6a**: Un resumen por chunk (ciudad × semana) — costo estimado ~$1.10 USD
 - **6c**: Resumen ejecutivo del programa completo (map-reduce) — ~$0.05 USD
 
-Requiere `ANTHROPIC_API_KEY` en `.env`.
+Requiere acceso a la Claude API (incluido en el plan Claude Enterprise de tu organización).
 
 ```bash
 uv run python scripts/python_scripts/06_summarization.py
@@ -682,7 +689,7 @@ LLM-Apapachar/
 
 - **Stata 17+** (para el script de remoción de PII)
 - **Python 3.12+** con `uv` instalado
-- **API key de Anthropic** (solo para los pasos 5b y 6)
+- **Acceso a Claude API** (solo para los pasos 5b, 6 y 10c) — incluido en el plan Claude Enterprise de tu organización
 
 ### Instalación
 
@@ -703,12 +710,13 @@ source .venv/bin/activate    # macOS/Linux
 Crear un archivo `.env` en la raíz del proyecto:
 
 ```bash
-# Requerido para los pasos 5b y 6
-ANTHROPIC_API_KEY=sk-ant-...
-
 # Requerido para correr scripts de Stata desde Python
 STATA_CMD=C:\Program Files\Stata18\StataSE-64.exe
 STATA_EDITION=se
+
+# Solo necesario si corres los scripts de Claude (06, 05b, 10c) fuera de Claude Code.
+# Si usas Claude Code (plan enterprise), el acceso a la API ya está disponible.
+# ANTHROPIC_API_KEY=<tu-clave-enterprise>
 ```
 
 ### Comandos útiles
