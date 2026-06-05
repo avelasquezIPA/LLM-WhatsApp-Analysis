@@ -1,5 +1,5 @@
-"""Paso 6: Summarización con Claude API - Programa Apapachar
-==========================================================
+"""Paso 6: Summarización con Claude API
+=======================================
 Genera resúmenes estructurados de los mensajes de WhatsApp usando Claude.
 
 Tres modalidades:
@@ -8,7 +8,9 @@ Tres modalidades:
   6c. Summarización jerárquica: resumen ejecutivo del programa completo
       usando los resúmenes del 6a (map-reduce)
 
-Requiere: ANTHROPIC_API_KEY en .env
+Requiere: acceso a Claude API (incluido en el plan Claude Enterprise).
+  Si corres este script fuera de Claude Code, añade al .env:
+  ANTHROPIC_API_KEY=<tu-clave-enterprise>
 
 Costo estimado (claude-sonnet-4-6):
   - 6a (48 chunks): ~$1.10 USD
@@ -199,9 +201,10 @@ if __name__ == "__main__":
 
     # Verificar API key
     if not os.getenv("ANTHROPIC_API_KEY"):
-        print("\nERROR: ANTHROPIC_API_KEY no está configurada en .env")
-        print("Agrega tu key en el archivo .env:")
-        print("  ANTHROPIC_API_KEY=sk-ant-...")
+        print("\nERROR: ANTHROPIC_API_KEY no encontrada.")
+        print("Acceso a Claude API requerido (plan Claude Enterprise).")
+        print("Si ejecutas fuera de Claude Code, añade al .env:")
+        print("  ANTHROPIC_API_KEY=<tu-clave-enterprise>")
         exit(1)
 
     # 6a: Resumir todos los chunks
