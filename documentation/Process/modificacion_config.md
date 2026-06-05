@@ -162,9 +162,9 @@ de mensaje y el rol del remitente.
 
 ```yaml
   values:
-    text_message_type: "Mensaje en Texto"  # Valor en la columna message_type
-    participant_sender: "Participante"     # Valor en la columna sender
-    facilitator_sender: "Facilitador"      # Valor en la columna sender
+    text_message_type: "Mensaje en Texto"  # Valor en la columna de tipo de mensaje
+    participant_sender: "Participante"     # Valor en la columna de remitente, para participantes
+    facilitator_sender: "Facilitador"      # Valor en la columna de remitente, para facilitadores
     missing_gender: "Sin género"           # Valor de relleno (puede dejarse igual)
 ```
 
