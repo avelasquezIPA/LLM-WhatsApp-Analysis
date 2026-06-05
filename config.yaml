@@ -58,7 +58,7 @@ data:
   intermediate:
     preprocessed_messages: "data/clean/mensajes_preprocesados.parquet"
     chunks: "data/clean/chunks.parquet"
-    vectorstore: "data/vectorstore"
+    vectorstore: "vectorstore"
 
   # Nombres de columnas en el dataset de WhatsApp [ADAPTAR].
   # Estos son los nombres que tiene tu .dta después de limpiar con Stata.
@@ -261,6 +261,8 @@ analysis:
     top_k_messages: 5
     min_message_words: 5
     # Familias del árbol de códigos a incluir en la búsqueda [ADAPTAR]
+    # Los nombres deben coincidir exactamente con la columna "familia" del
+    # Excel definido en data.input.coding_tree_file.
     relevant_families:
       - "5. ACTITUD DE LOS PARTICIPANTES FRENTE AL PROGRAMA"
       - "7. RESULTADOS INICIALES E INTERMEDIOS"
@@ -299,19 +301,17 @@ coding:
     5: [9, 10]
     6: [11, 12]
 
-  # Grupos piloto para el paso 10b (piloto de codificación)
+  # Grupos piloto para el paso 10b (piloto de codificación) [ADAPTAR]
+  # Usar valores reales de tu dataset: grupo → columna group_id,
+  # ciudad → columna city_group, semana → columna week_number.
   pilot_groups:
-    - grupo: "GMV9"
-      semana: 6
-      ciudad: "Valledupar"
-      genero: "Mujeres"
-    - grupo: "GMB3"
-      semana: 4
-      ciudad: "Bogota"
-      genero: "Mujeres"
-    - grupo: "GHV9"
+    - grupo: "GRU01"
       semana: 3
-      ciudad: "Valledupar"
+      ciudad: "Ciudad1"
+      genero: "Mujeres"
+    - grupo: "GRU02"
+      semana: 5
+      ciudad: "Ciudad2"
       genero: "Hombres"
 
   # Indicadores de interacción (Dedios-Sanguineti et al., 2025)
@@ -394,7 +394,7 @@ coding:
       template_code: "I7_identidad"
 
     - id: "I8"
-      level: "Específico Apapachar"
+      level: "Adicional"
       name: "Adopción de práctica reportada"
       definition_dedios: "N/A — indicador nuevo propuesto para intervenciones"
       adaptation: >
@@ -417,6 +417,7 @@ visualization:
   line_spacing_value: 276        # Word: 276 = interlineado 1.15
 
   colors:
+    # [ADAPTAR] Las claves deben coincidir con los valores en project.cities.
     cities:
       Bogota: "#1976D2"
       Soacha: "#388E3C"
