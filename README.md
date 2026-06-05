@@ -44,6 +44,8 @@ produce:
 - **Búsqueda semántica (RAG)** para responder preguntas de investigación (via Claude)
 - **Indicadores de interacción participante-participante** (cadenas de diálogo,
   latencia de respuesta, retención, escalabilidad)
+- **Codificación con framework DEDIOS** (Dedios-Sanguineti et al., 2025): niveles
+  de interacción entre participantes vía Claude API
 - **Archivos Excel de codificación** listos para análisis cualitativo manual
 
 El pipeline combina **Stata** (limpieza y remoción de PII) con **Python**
@@ -94,23 +96,24 @@ No se necesita cambiar nada para la prueba.
 
 ### 3. Correr el pipeline
 
-Los pasos para generar el mapa de similitud semántica:
-
 ```bash
 cd scripts/python_scripts
 
 uv run python 02_preprocessing.py    # limpieza de texto
 uv run python 03_chunking.py         # agrupar mensajes
 uv run python 04_embeddings.py       # generar vectores (descarga modelo ~400 MB la primera vez)
+uv run python 05a_clustering.py      # clustering temático (KMeans + UMAP)
 uv run python 06_similarity_map.py   # mapa de similitud semántica
 ```
 
 **Outputs esperados:**
 
 ```text
+outputs/figures/05a_elbow.png             — número óptimo de clusters
+outputs/figures/05a_umap_clusters.png     — visualización UMAP de clusters
 outputs/figures/06_similarity_heatmap.png — mapa de calor semántico
-outputs/figures/06_semantic_evolution.png  — evolución semántica por semana
-outputs/tables/06_similarity_matrix.csv   — matriz de similitud entre chunks
+outputs/figures/06_semantic_evolution.png — evolución semántica por semana
+outputs/tables/06_similarity_matrix.csv  — matriz de similitud entre chunks
 ```
 
 > El pipeline mínimo **no requiere Stata**. Los datos de demo ya están limpios de PII.
@@ -141,11 +144,11 @@ just stata-script 01_remove_pii
 uv run python 02_preprocessing.py
 uv run python 03_chunking.py
 uv run python 04_embeddings.py
-uv run python 05a_clustering.py      # opcional: clustering temático
-uv run python 06_similarity_map.py
-uv run python 08b_citation_finder_participantes.py   # requiere árbol de códigos en config.yaml
-uv run python 10a_cadenas_interaccion.py
-uv run python 10c_codificacion.py    # requiere acceso a Claude API (plan enterprise)
+uv run python 05a_clustering.py      # clustering temático (KMeans + UMAP)
+uv run python 06_similarity_map.py   # mapa de similitud semántica
+uv run python 08b_citation_finder_participantes.py   # buscador de citas por código cualitativo
+uv run python 10a_cadenas_interaccion.py             # cadenas de interacción P-P
+uv run python 10c_codificacion.py                    # codificación framework DEDIOS (requiere Claude API)
 ```
 
 ---

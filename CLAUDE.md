@@ -33,7 +33,10 @@ cd scripts/python_scripts
 uv run python 02_preprocessing.py
 uv run python 03_chunking.py
 uv run python 04_embeddings.py
+uv run python 05a_clustering.py
 uv run python 06_similarity_map.py
+uv run python 10a_cadenas_interaccion.py
+uv run python 10c_codificacion.py    # requires Claude API (enterprise plan)
 ```
 
 Or use the `/run-step <N>` skill to run any step with pre-flight validation.
@@ -49,7 +52,8 @@ Or use the `/run-step <N>` skill to run any step with pre-flight validation.
 | 05a | `05a_clustering.py` | Cluster figures + CSV |
 | 06 | `06_similarity_map.py` | Semantic heatmap + evolution figure |
 | 08b | `08b_citation_finder_participantes.py` | Citations per qualitative code |
-| 10c | `10c_codificacion.py` | Full coding with framework indicators |
+| 10a | `10a_cadenas_interaccion.py` | Participant-participant interaction chains |
+| 10c | `10c_codificacion.py` | DEDIOS framework coding (Claude API) |
 
 See [`README.md`](README.md) for the complete pipeline documentation.
 
