@@ -11,12 +11,12 @@ un nuevo proyecto solo necesita editar `config.yaml`.
 — explica campo por campo qué cambiar para que el pipeline funcione con
 tus datos sin tocar ningún script Python.
 
-> [!WARNING]
-> NUNCA SUBAS DATOS A GITHUB. NUNCA USES HERRAMIENTAS DE IA CON DATOS
-> QUE CONTENGAN INFORMACIÓN PERSONALMENTE IDENTIFICABLE (PII) SIN
-> HABERLA REMOVIDO ANTES.
-> Ante dudas, consulta las [IPA AI Usage Guidelines](https://ipastorage.box.com/s/mvr67ygvz1y3v8qmgjey67lk7msmyeks)
-> o escribe a support@poverty-action.org.
+> [!IMPORTANT]
+> Antes de usar este pipeline, asegúrate de que tus datos no contengan
+> información personalmente identificable (PII). Los datos de participantes
+> deben estar anonimizados antes de procesarse con cualquier herramienta de IA.
+> Consulta las [IPA AI Usage Guidelines](https://ipastorage.box.com/s/mvr67ygvz1y3v8qmgjey67lk7msmyeks)
+> si tienes dudas sobre la clasificación de tus datos.
 
 ---
 
